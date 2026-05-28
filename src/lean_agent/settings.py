@@ -49,10 +49,7 @@ class Settings:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     load_dotenv(PROJECT_ROOT / ".env", override=False)
-    # API_KEY is the generic name; OPENAI_API_KEY is the common pre-existing one.
-    settings = Settings(
-        api_key=os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY") or None,
-    )
+    settings = Settings(api_key=os.getenv("OPENAI_API_KEY") or None)
     settings.log_dir.mkdir(parents=True, exist_ok=True)
     return settings
 

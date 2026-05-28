@@ -19,13 +19,8 @@ playground.ipynb    # demo: build agent, run a prompt, save logs
 
 ```sh
 uv sync
-cp .env.example .env
-# edit .env: set API_KEY (OPENAI_API_KEY also works)
+cp .env.example .env   # then open .env and paste your OpenAI API key
 ```
-
-Only the API key comes from `.env`. Defaults for `model_id`, `api_base`, and
-`log_dir` live in [`src/lean_agent/settings.py`](src/lean_agent/settings.py)
-— edit the dataclass to change them (e.g. point `api_base` at a vLLM server).
 
 ## Use
 

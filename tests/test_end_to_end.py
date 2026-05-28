@@ -18,8 +18,8 @@ from lean_agent.settings import Settings
 
 
 pytestmark = pytest.mark.skipif(
-    not (os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")),
-    reason="no API key in environment",
+    not os.getenv("OPENAI_API_KEY"),
+    reason="OPENAI_API_KEY not set",
 )
 
 
