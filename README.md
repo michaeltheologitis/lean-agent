@@ -4,12 +4,14 @@ A small [smolagents](https://github.com/huggingface/smolagents) `CodeAgent`
 playground: a handful of example tools, typed settings, and per-run logs
 saved as `{manifest, answer, logs}` JSON plus a readable YAML transcript.
 
+**To get started: run the [Setup](#setup) steps below, then open [`playground.ipynb`](playground.ipynb).**
+
 ## Layout
 
 ```
 src/lean_agent/
     settings.py     # Settings (model_id / api_key / api_base / log_dir)
-                    # + RunContext / create_logs / save_run / build_transcript
+                    # + create_logs / save_run / build_transcript
     tools.py        # 10 example @tool functions
 tests/              # pytest suite (unit + one end-to-end test)
 playground.ipynb    # demo: build agent, run a prompt, save logs
