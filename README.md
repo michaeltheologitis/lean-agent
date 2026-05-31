@@ -1,68 +1,133 @@
 # lean-agent
 
-A small [smolagents](https://github.com/huggingface/smolagents) `CodeAgent`
-playground: a handful of example tools, typed settings, and per-run logs
-saved as `{manifest, answer, logs}` JSON plus a readable YAML transcript.
+This branch wires a small [smolagents](https://github.com/huggingface/smolagents)
+`CodeAgent` to Lean through one deliberately narrow tool:
+`lean_check_compiles`.
 
-**To get started: run the [Setup](#setup) steps below, then open [`playground.ipynb`](playground.ipynb).**
+The repository includes a standalone Lean project in `lean_project/` that
+depends on Mathlib. The example task asks the agent to replace a `sorry` in:
 
-## Layout
-
+```text
+lean_project/Problems/LeanWorkbookPlus2.lean
 ```
-src/lean_agent/
-    settings.py     # Settings (model_id / api_key / api_base / log_dir)
-                    # + create_logs / save_run / build_transcript
-    tools.py        # 10 example @tool functions
-tests/              # pytest suite (unit + one end-to-end test)
-playground.ipynb    # demo: build agent, run a prompt, save logs
+
+The test harness then writes the agent's candidate proof to an ignored scratch
+file and validates it with `lake env lean`.
+
+## Requirements
+
+- Python 3.12
+- `uv`
+- Lean/Lake through `elan`
+- a Token Factory API key
+
+The default configured model is:
+
+```dotenv
+NEBIUS_MODEL_ID='deepseek-ai/DeepSeek-V3.2-fast'
+NEBIUS_API_BASE='https://api.tokenfactory.nebius.com/v1/'
 ```
+
+Token Factory did not list `deepseek-v4-flash` on this endpoint when checked.
+It did list `deepseek-ai/DeepSeek-V4-Pro`; set `NEBIUS_MODEL_ID` to that if you
+want to test the V4 model instead of the fast default.
 
 ## Setup
 
+From the repository root:
+
 ```sh
 uv sync
-cp .env.example .env   # then open .env and paste your OpenAI API key
+cp .env.example .env
 ```
 
-## Use
+Edit `.env` and add your key:
 
-```python
-from smolagents import CodeAgent, OpenAIServerModel
-from lean_agent import get_settings, save_run
-from lean_agent.tools import fibonacci, is_prime, temperature_convert
-
-settings = get_settings()
-agent = CodeAgent(
-    tools=[fibonacci, is_prime, temperature_convert],
-    model=OpenAIServerModel(
-        model_id=settings.model_id,
-        api_key=settings.api_key,
-        api_base=settings.api_base,
-    ),
-    max_steps=6,
-    instructions="Prefer using a tool when one fits the question. Be concise.",
-)
-answer = agent.run("Is 9973 prime?")
-run_dir = save_run(agent, answer)    # or: save_run(agent, answer, run_id="my-experiment")
-print(run_dir)
+```dotenv
+NEBIUS_API_KEY='...'
+NEBIUS_MODEL_ID='deepseek-ai/DeepSeek-V3.2-fast'
+NEBIUS_API_BASE='https://api.tokenfactory.nebius.com/v1/'
 ```
 
-See `playground.ipynb` for the same workflow end-to-end.
+`TOKEN_FACTORY_API_KEY` is also accepted as an alias.
 
-## Tests
+## Set Up The Lean Project
+
+The Lean project is intentionally separate from the Python package:
+
+```text
+lean_project/
+    lakefile.lean
+    lake-manifest.json
+    lean-toolchain
+    Problems/LeanWorkbookPlus2.lean
+```
+
+Fetch Mathlib's compiled cache:
 
 ```sh
-uv run pytest
+cd lean_project
+lake exe cache get
+lake env lean Problems/LeanWorkbookPlus2.lean
+cd ..
 ```
 
-The end-to-end test calls the model and is auto-skipped when no key is set.
+The last command should succeed and print a warning that the declaration uses
+`sorry`. That is expected; this file is the problem the agent will solve.
 
-## Logs
+## Run The Agent Example
 
-Each call to `save_run()` writes:
+Run the model-backed test:
 
+```sh
+uv run pytest tests/test_lean_workbook_agent_e2e.py -q
 ```
-logs/<UTC-timestamp>-<run_id>/
-    run.json         # {manifest, answer, logs: {total_usage, steps: [{usage, messages}, ...]}}
-    transcript.yaml  # sanitized linear system / user / assistant / tool-* chat view
+
+That test:
+
+1. reads `lean_project/Problems/LeanWorkbookPlus2.lean`;
+2. asks the agent for a proof replacing the `sorry`;
+3. rejects answers containing `sorry`, `admit`, or `axiom`;
+4. writes the candidate to `lean_project/AgentOutput.lean`;
+5. checks it with `lean_check_compiles`;
+6. deletes `AgentOutput.lean` unless `KEEP_AGENT_LEAN_OUTPUT=1` is set.
+
+To inspect the generated proof after a run:
+
+```sh
+KEEP_AGENT_LEAN_OUTPUT=1 uv run pytest tests/test_lean_workbook_agent_e2e.py -q
 ```
+
+`lean_project/AgentOutput.lean` is ignored by Git.
+
+## Playground
+
+The notebook uses the same settings loader as the tests:
+
+```sh
+uv run jupyter lab playground.ipynb
+```
+
+Use it for manual experiments with `CodeAgent`, `OpenAIServerModel`, and
+`LEAN_TOOLS`. For a reproducible smoke test, prefer the pytest command above.
+
+## Test Without Spending Tokens
+
+Blank the API key environment variables to force model-backed tests to skip:
+
+```sh
+NEBIUS_API_KEY= TOKEN_FACTORY_API_KEY= OPENAI_API_KEY= uv run pytest -q
+```
+
+This checks the deterministic unit tests and Lean tool plumbing without calling
+the model API.
+
+## Files That Should Not Be Committed
+
+These are intentionally ignored:
+
+- `.env`
+- `.venv/`
+- `logs/`
+- `lean_project/.lake/`
+- `lean_project/AgentOutput.lean`

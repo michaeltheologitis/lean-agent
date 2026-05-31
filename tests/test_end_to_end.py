@@ -1,13 +1,12 @@
 """End-to-end test: build an agent, run a real prompt, persist + inspect logs.
 
-This test hits the real OpenAI API and is skipped when no key is configured.
+This test hits the configured OpenAI-compatible model API and is skipped when
+no key is configured.
 """
 
 from __future__ import annotations
 
 import json
-import os
-
 import pytest
 import yaml
 from smolagents import CodeAgent, OpenAIServerModel
@@ -18,8 +17,8 @@ from lean_agent.settings import Settings
 
 
 pytestmark = pytest.mark.skipif(
-    not os.getenv("OPENAI_API_KEY"),
-    reason="OPENAI_API_KEY not set",
+    settings_module.get_settings().api_key is None,
+    reason="model API key not set",
 )
 
 

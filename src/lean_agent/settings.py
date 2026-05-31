@@ -29,27 +29,47 @@ import yaml
 from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_MODEL_ID = "deepseek-ai/DeepSeek-V3.2-fast"
+DEFAULT_API_BASE = "https://api.tokenfactory.nebius.com/v1/"
 
 
 @dataclass(frozen=True)
 class Settings:
     """Runtime configuration.
 
-    Only secrets come from the environment. Everything else is a default here
-    — edit the dataclass to change them. `api_key` / `api_base` mirror
-    smolagents' `OpenAIServerModel` kwargs so swapping providers (hosted
-    OpenAI, vLLM, llama.cpp, ...) is just a default change.
+    `api_key` / `api_base` mirror smolagents' `OpenAIServerModel` kwargs so
+    swapping OpenAI-compatible providers is just a settings change.
     """
     api_key: str | None = None
-    model_id: str = "gpt-5.4-nano"
-    api_base: str | None = None  # None = hosted OpenAI; set to e.g. "http://localhost:8000/v1" for vLLM
+    model_id: str = DEFAULT_MODEL_ID
+    api_base: str | None = DEFAULT_API_BASE
     log_dir: Path = PROJECT_ROOT / "logs"
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     load_dotenv(PROJECT_ROOT / ".env", override=False)
-    settings = Settings(api_key=os.getenv("OPENAI_API_KEY") or None)
+    settings = Settings(
+        api_key=(
+            os.getenv("NEBIUS_API_KEY")
+            or os.getenv("TOKEN_FACTORY_API_KEY")
+            or os.getenv("OPENAI_API_KEY")
+            or None
+        ),
+        model_id=(
+            os.getenv("NEBIUS_MODEL_ID")
+            or os.getenv("TOKEN_FACTORY_MODEL")
+            or os.getenv("OPENAI_MODEL_ID")
+            or DEFAULT_MODEL_ID
+        ),
+        api_base=(
+            os.getenv("NEBIUS_API_BASE")
+            or os.getenv("TOKEN_FACTORY_BASE_URL")
+            or os.getenv("OPENAI_API_BASE")
+            or os.getenv("OPENAI_BASE_URL")
+            or DEFAULT_API_BASE
+        ),
+    )
     settings.log_dir.mkdir(parents=True, exist_ok=True)
     return settings
 
