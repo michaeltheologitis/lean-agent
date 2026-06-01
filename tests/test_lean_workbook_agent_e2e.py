@@ -61,8 +61,14 @@ def test_agent_solves_lean_workbook_plus_2():
         model_id=settings.model_id,
         api_key=settings.api_key,
         api_base=settings.api_base,
-        client_kwargs={"timeout": 90},
-        temperature=0,
+        # DeepSeek-V3.2 is a reasoning model; given the large CodeAgent system
+        # prompt it can spiral into a very long generation and blow past the
+        # provider's ~600s gateway window (nginx 504). Cap the output so a
+        # runaway stops well inside that budget. temperature=0.6 avoids the
+        # degenerate repetition the model shows at temperature=0.
+        max_tokens=4096,
+        client_kwargs={"timeout": 180},
+        temperature=0.6,
     )
     agent = CodeAgent(
         tools=LEAN_TOOLS,
