@@ -7,6 +7,7 @@ from .settings import (
     save_run,
 )
 from .tools import ALL_TOOLS
+from .putnambench_tools import get_putnambench_problems, get_problem_statement
 
 __all__ = [
     "ALL_TOOLS",
@@ -14,4 +15,6 @@ __all__ = [
     "create_logs",
     "get_settings",
     "save_run",
+    "get_putnambench_problems",
+    "get_problem_statement"
 ]
