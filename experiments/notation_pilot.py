@@ -45,6 +45,22 @@ WORKDIR = CANDIDATES / "NotationExp" / "_run"
 
 FORBIDDEN = ("sorry", "admit", "axiom")
 
+# lean-lsp-mcp tools given to the --sighted agent on this branch (gcd-lean-tools-extra).
+# Group A (local, fast feedback) + Group B (lemma retrieval; hits external services).
+SIGHTED_TOOLS = (
+    "lean_goal",                # proof-state at a line (hyps ⊢ target)
+    # Group A — local feedback
+    "lean_diagnostic_messages", # full structured compiler errors/warnings
+    "lean_hover_info",          # type + docs of an identifier
+    "lean_multi_attempt",       # try several tactic snippets, report which compile
+    # Group B — lemma retrieval (external network)
+    "lean_state_search",        # lemmas matching the current goal state
+    "lean_loogle",              # search lemmas by type/shape pattern
+    "lean_leansearch",          # natural-language lemma search
+    "lean_leanfinder",          # semantic lemma search
+    "lean_hammer_premise",      # premise selection for the goal
+)
+
 
 @dataclass(frozen=True)
 class Condition:
@@ -245,11 +261,18 @@ def build_prompt(problem: Problem, cond: Condition, out_file: Path,
     abs_path = str(out_file)
     statement_with_sorry = cond.template.replace("__PROOF__", "by\n  sorry")
     sighted_help = (
-        "\nYou also have `lean_goal(file_path, line)`: it returns the proof goal "
-        "state (hypotheses ⊢ target) at a line in the file. Write the file with a "
-        "`sorry` (or a partial proof ending in `sorry`) using write_and_check, then "
-        f"call `lean_goal('{abs_path}', <line of the sorry>)` to see exactly what "
-        "remains to prove, and use that to choose your next tactics.\n"
+        "\nYou also have several Lean LSP tools (all take the absolute file path "
+        f"'{abs_path}'):\n"
+        "- `lean_goal(file_path, line)`: the proof goal state (hypotheses ⊢ target) "
+        "at a line. Write the file with a `sorry` using write_and_check, then call "
+        "this at the line of the sorry to see what remains.\n"
+        "- `lean_diagnostic_messages(file_path)`: all compiler errors/warnings.\n"
+        "- `lean_hover_info(file_path, line, column)`: type and docs of an identifier.\n"
+        "- `lean_multi_attempt(file_path, line, snippets)`: try several candidate "
+        "tactics at once and see which compile and the resulting goal.\n"
+        "- Lemma search: `lean_state_search`, `lean_loogle`, `lean_leansearch`, "
+        "`lean_leanfinder`, `lean_hammer_premise` find relevant existing lemmas.\n"
+        "Use these to inspect the state, find lemmas, and choose your next tactics.\n"
         if sighted else ""
     )
     return (
@@ -446,8 +469,9 @@ def main() -> None:
         return out
 
     if args.sighted:
-        # Load ONLY lean_goal from lean-lsp-mcp (keep the toolset tiny for small
-        # models). Needs `mcp` + `mcpadapt`: run with
+        # Load a curated set of lean-lsp-mcp tools (branch gcd-lean-tools-extra:
+        # lean_goal + Group A local-feedback + Group B lemma-retrieval). Needs
+        # `mcp` + `mcpadapt`: run with
         #   uv run --with mcp --with mcpadapt python experiments/notation_pilot.py --sighted ...
         from mcp import StdioServerParameters
         from smolagents import ToolCollection
@@ -457,10 +481,13 @@ def main() -> None:
         print("starting lean-lsp-mcp (first call starts `lake serve` on candidates) ...")
         with ToolCollection.from_mcp(server, trust_remote_code=True,
                                      structured_output=False) as tc:
-            goal = next((t for t in tc.tools if t.name == "lean_goal"), None)
-            if goal is None:
-                raise SystemExit("lean_goal not found in lean-lsp-mcp tools")
-            results = run_all(extra_tools=[goal], sighted=True)
+            by_name = {t.name: t for t in tc.tools}
+            missing = [n for n in SIGHTED_TOOLS if n not in by_name]
+            if missing:
+                raise SystemExit(f"lean-lsp-mcp tools not found: {missing}")
+            selected = [by_name[n] for n in SIGHTED_TOOLS]
+            print(f"loaded sighted tools: {SIGHTED_TOOLS}")
+            results = run_all(extra_tools=selected, sighted=True)
     else:
         results = run_all()
 
