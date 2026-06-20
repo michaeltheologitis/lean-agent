@@ -26,3 +26,10 @@ logs/
 .DS_Store
 .idea/
 .vscode/
+
+# PutnamBench checkout (problems live on disk, not tracked)
+/PutnamBench/
+
+# Experiment records (kept locally, not committed)
+experiments/results_*.json
+experiments/putnam_results.jsonl
