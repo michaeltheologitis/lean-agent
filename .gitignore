@@ -32,4 +32,4 @@ logs/
 
 # Experiment records (kept locally, not committed)
 experiments/results_*.json
-experiments/putnam_results.jsonl
+experiments/putnam_results*.jsonl
