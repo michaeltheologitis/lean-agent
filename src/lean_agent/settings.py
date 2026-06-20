@@ -28,6 +28,8 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 
+from .clean import write_clean_logs
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODEL_ID = "deepseek-ai/DeepSeek-V3.2-fast"
 DEFAULT_API_BASE = "https://api.tokenfactory.nebius.com/v1/"
@@ -176,5 +178,9 @@ def save_run(agent: Any, answer: Any, *, run_id: str | None = None) -> Path:
     }
     with (run_dir / "transcript.yaml").open("w", encoding="utf-8") as f:
         yaml.safe_dump(transcript, f, sort_keys=False, allow_unicode=True, width=100)
+
+    # Naren's cleaner logs (clean_log.json / clean_log.md), in addition to the
+    # original run.json / transcript.yaml above.
+    write_clean_logs(agent, answer, run_dir, manifest)
 
     return run_dir
