@@ -1,7 +1,7 @@
 [project]
 name = "lean-agent"
 version = "0.1.0"
-description = "A lean smolagents-based CodeAgent with principled logging."
+description = "A common, inspectable baseline theorem-proving agent for Lean 4."
 readme = "README.md"
 authors = [
     { name = "Michael Theologitis", email = "michael.theologitis@outlook.com" }
@@ -10,7 +10,8 @@ requires-python = ">=3.12"
 dependencies = [
     "python-dotenv>=1.2.2",
     "pyyaml>=6.0.3",
-    "smolagents[litellm]>=1.25.0",
+    "smolagents>=1.25.0",
+    "openai>=1.0",
 ]
 
 [build-system]
@@ -19,8 +20,6 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "ipykernel>=7.2.0",
-    "jupyter>=1.1.1",
     "pytest>=9.0.3",
 ]
 

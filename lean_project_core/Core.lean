@@ -1,0 +1,2 @@
+-- Core-only smoke project: no Mathlib. Used by the `smoke` benchmark to live-test
+-- the agent <-> Lean <-> logs loop without a multi-GB Mathlib build.
