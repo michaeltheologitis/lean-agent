@@ -83,8 +83,9 @@ def _run_compile_command(cmd: list[str], cwd: Path, timeout_seconds: int) -> str
     combined = f"{proc.stdout}\n{proc.stderr}"
     if proc.returncode != 0:
         status = "compile failed"
-    elif re.search(r"declaration uses 'sorry'|uses 'sorry'|sorryAx", combined):
-        # Compiles, but the proof is incomplete — the trap the team hit.
+    elif re.search(r"uses\s+\W?sorry|sorryAx", combined, re.IGNORECASE):
+        # Compiles, but the proof is incomplete — the trap the team hit. Lean emits
+        # `declaration uses \`sorry\`` (backticks) as a *warning*, exit code 0.
         status = "compiled WITH sorry/admit (INCOMPLETE — not a real proof)"
     else:
         status = "compiled successfully"

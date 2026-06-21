@@ -56,8 +56,9 @@ def test_sorry_warning_is_flagged(monkeypatch, tmp_path):
     """The trap: a file with sorry compiles (exit 0) with a warning — must NOT read as
     a clean success."""
     root = _fake_project(tmp_path)
+    # Real Lean format: backticks around sorry, emitted on stdout, exit code 0.
     _mock_run(monkeypatch, returncode=0,
-              stderr="Demo.lean:1:0: warning: declaration uses 'sorry'\n")
+              stdout="Demo.lean:1:8: warning: declaration uses `sorry`\n")
     result = lean.lean_check_compiles.forward(project_path=str(root), file_path="Demo.lean")
     assert "compiled WITH sorry/admit" in result
     assert "status: compiled successfully" not in result
@@ -82,7 +83,7 @@ def test_write_and_check_writes_and_flags_sorry(monkeypatch, tmp_path):
     work_file = work / "p.lean"
     work_file.write_text("placeholder\n", encoding="utf-8")
     _mock_run(monkeypatch, returncode=0,
-              stderr="p.lean:1:0: warning: declaration uses 'sorry'\n")
+              stdout="p.lean:1:8: warning: declaration uses `sorry`\n")
 
     tool = lean.make_write_and_check(root, work_file)
     out = tool.forward(content="theorem t : True := by sorry\n")

@@ -29,9 +29,14 @@ INSTRUCTIONS = (
 )
 
 
-def build_model(*, max_tokens: int | None = 4096, timeout: int = 180, **model_kwargs: Any):
+def build_model(*, max_tokens: int | None = None, timeout: int = 180, **model_kwargs: Any):
     """Build the configured OpenAI-compatible model. Defaults come from `get_settings()`
-    (OpenAI `gpt-5.4-nano`). `model_kwargs` pass through to `OpenAIServerModel`."""
+    (OpenAI `gpt-5.4-nano`). `model_kwargs` pass through to `OpenAIServerModel`.
+
+    `max_tokens` is left unset by default — gpt-5 reasoning models use
+    `max_completion_tokens`, and the old explicit cap existed only to dodge a Nebius
+    gateway timeout. Pass it (or other kwargs) for non-OpenAI providers that need a cap.
+    """
     s = get_settings()
     if not s.api_key:
         raise SystemExit(
