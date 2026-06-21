@@ -1,8 +1,9 @@
 """PutnamBench adapter.
 
 Loads the vendored Putnam statements from `data/putnam/*.lean` (extracted from PutnamBench
-with ground-truth answers stripped) and produces shared `Problem`s that compile inside
-`lean_project/` (Mathlib). Parsing logic descends from Nhan's `putnam_loader.py`.
+with ground-truth answers stripped) and produces shared `Problem`s. They compile against a
+PutnamBench checkout (default `../PutnamBench/lean4`, gitignored). Parsing logic descends from
+Nhan's `putnam_loader.py`.
 
 Two task types (PutnamBench's own split):
   * "proof"        — no answer def; the agent fills the single theorem `sorry`.
@@ -11,9 +12,9 @@ Two task types (PutnamBench's own split):
                      blind baseline, so `load()` defaults to proof-only.
 
 Heads-up: these statements were extracted against PutnamBench's Lean project (Mathlib
-v4.27.0). `lean_project/` here is a different Mathlib pin — verify version compatibility on a
-machine with the toolchain before trusting the grades. (Loaders + parsing are unit-tested;
-actual Mathlib grading is not runnable on a box without the built project.)
+v4.27.0), so grade them in a PutnamBench checkout at that pin — `lake exe cache get` it first
+(see `data/putnam/SOURCE.md`). Loaders + parsing are unit-tested; actual Mathlib grading is
+not runnable on a box without the built project.
 """
 
 from __future__ import annotations

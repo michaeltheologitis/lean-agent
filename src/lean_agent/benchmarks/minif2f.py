@@ -10,8 +10,9 @@ one `theorem ... := by sorry`. There is no in-file informal statement (MiniF2F h
 `informal` is empty.
 
 Source + Mathlib version: see `data/minif2f/SOURCE.md`. The statements were authored against
-Mathlib v4.24.0; `lean_project/` here is a different pin — point `--project`/`load(project=)`
-at a matching built project before trusting grades.
+Mathlib v4.24.0, so grade them in a miniF2F-lean4 checkout at that pin (default
+`../miniF2F-lean4`, gitignored; `lake exe cache get` it first). Override with
+`--project`/`load(project=)`.
 """
 
 from __future__ import annotations
