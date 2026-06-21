@@ -8,6 +8,7 @@ _ALL_ENV = (
     "OPENAI_API_KEY", "OPENAI_MODEL_ID", "OPENAI_API_BASE", "OPENAI_BASE_URL",
     "NEBIUS_API_KEY", "NEBIUS_MODEL_ID", "NEBIUS_API_BASE",
     "TOKEN_FACTORY_API_KEY", "TOKEN_FACTORY_MODEL", "TOKEN_FACTORY_BASE_URL",
+    "LEAN_VERSION", "LEAN_PROJECT",
 )
 
 
@@ -75,6 +76,22 @@ def test_token_factory_aliases(monkeypatch):
     assert s.api_key == "tf-test"
     assert s.model_id == "some-model"
     assert s.api_base == "https://token-factory.test/v1"
+
+
+def test_lean_defaults(monkeypatch):
+    _fresh(monkeypatch)
+    s = settings_module.get_settings()
+    assert s.lean_version == "v4.29.1"
+    assert s.lean_project is None
+
+
+def test_lean_overrides(monkeypatch):
+    _fresh(monkeypatch)
+    monkeypatch.setenv("LEAN_VERSION", "v4.24.0")
+    monkeypatch.setenv("LEAN_PROJECT", "/tmp/mathlib-proj")
+    s = settings_module.get_settings()
+    assert s.lean_version == "v4.24.0"
+    assert s.lean_project == "/tmp/mathlib-proj"
 
 
 def test_is_cached(monkeypatch):

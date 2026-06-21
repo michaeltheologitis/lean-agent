@@ -1,26 +1,31 @@
 """The shared theorem-proving agent.
 
-Everyone runs the same thing: a smolagents `CodeAgent` with the Lean tools and one set of
-instructions. `solve(problem)` runs it on one benchmark problem, grades the result, saves the
-logs, and returns a plain dict. Parameterize it (`model`, `max_steps`) — don't fork it.
+`solve(problem, lean)` pre-warms BOTH the Lean environment (run the problem's preamble to get a
+base env with its definitions) AND the system prompt (append the same preamble), then runs a
+smolagents `CodeAgent` whose one tool, `lean_check`, compiles code against that env. The run is
+graded by whether any submission was a complete valid proof of the target, then logged.
 """
 
 from __future__ import annotations
 
-from smolagents import CodeAgent, OpenAIServerModel
+from smolagents import OpenAIServerModel, ToolCallingAgent
 
 from .benchmarks import Problem
+from .lean import Lean, make_lean_check
 from .logs import save_run
 from .settings import get_settings
-from .tools import write_and_check
 
+# A ToolCallingAgent (not CodeAgent): the model's job is to call `lean_check` with a blob of
+# Lean source. A CodeAgent makes it write Python, and it kept emitting bare Lean that the
+# Python parser rejected — derailing the run. Native tool calls pass the Lean as a string arg.
 INSTRUCTIONS = (
-    "You solve Lean 4 theorem-proving tasks. You get a Lean file with one `sorry`; replace it "
-    "with a real proof so the file compiles with no errors and no `sorry`/`admit`. Use "
-    "`write_and_check(file_path, content)` to write the COMPLETE file and compile it, then "
-    "read the compiler output and iterate. Keep the imports, any `open`, and the exact "
-    "theorem statement; only fill in the proof. When it compiles cleanly, call "
-    "`final_answer(\"done\")`."
+    "You solve Lean 4 theorem-proving tasks. You are given a target theorem; replace its "
+    "`sorry` with a real proof so it compiles with no errors and no `sorry`/`admit`. Call the "
+    "`lean_check` tool with your candidate `theorem ... := <proof>` (as the `code` argument) "
+    "to compile it against the pre-loaded environment; read the feedback (errors, or the "
+    "remaining goal if incomplete) and iterate. The imports and any given definitions are "
+    "ALREADY loaded — use them, don't repeat them, and don't restate the theorem differently. "
+    "When `lean_check` reports the proof is valid and complete, call `final_answer`."
 )
 
 
@@ -34,38 +39,44 @@ def build_model(**kwargs):
     return OpenAIServerModel(model_id=s.model_id, api_base=s.api_base, api_key=s.api_key, **kwargs)
 
 
-def solve(problem: Problem, *, work_dir, model=None, max_steps: int = 6, save: bool = True) -> dict:
-    """Run the agent on one problem; grade, log, and return a result dict.
+def solve(problem: Problem, *, lean: Lean, model=None, max_steps: int = 6, save: bool = True) -> dict:
+    """Run the agent on one problem against `lean` (a shared REPL session). Returns a result
+    dict (passed / steps / usage / run_dir)."""
+    base_env = lean.base_env(problem.preamble)
+    record = {"passed": False}
+    lean_check = make_lean_check(lean, base_env, problem.statement, record)
 
-    `work_dir` is where the editable copy of the problem file lives (inside its Lean project).
-    """
-    work_file = problem.prepare(work_dir)
-    agent = CodeAgent(
-        tools=[write_and_check],
-        model=model or build_model(),
-        max_steps=max_steps,
-        instructions=INSTRUCTIONS,
-    )
+    instructions = INSTRUCTIONS
+    if problem.preamble.strip():
+        instructions += (
+            "\n\nAlready loaded in the Lean environment — use these directly (do NOT redeclare "
+            f"them):\n```lean\n{problem.preamble.strip()}\n```"
+        )
+    agent = ToolCallingAgent([lean_check], model=model or build_model(),
+                             max_steps=max_steps, instructions=instructions)
 
     error = None
     answer = ""
     try:
-        answer = agent.run(problem.prompt(work_file))
+        answer = agent.run(problem.prompt())
     except Exception as exc:  # record API/agent failures, keep the batch going
         error = f"{type(exc).__name__}: {exc}"
 
-    result = problem.grade(work_file)
     usage = agent.monitor.get_total_token_counts()
+    result = {
+        "problem": problem.name,
+        "benchmark": problem.benchmark,
+        "passed": record["passed"],
+        "steps": len(agent.memory.steps),
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "error": error,
+    }
     if save:
         try:
-            rd = save_run(agent, answer, run_id=f"{problem.benchmark}-{problem.name}",
-                          manifest={"benchmark": problem.benchmark, "problem": problem.name,
-                                    **result})
+            rd = save_run(agent, answer, run_id=f"{problem.benchmark}-{problem.name}".replace("/", "-"),
+                          manifest={k: result[k] for k in ("benchmark", "problem", "passed")})
             result["run_dir"] = str(rd)
         except Exception as exc:
-            error = (error + " | " if error else "") + f"save_run failed: {exc}"
-
-    result.update(problem=problem.name, benchmark=problem.benchmark,
-                  steps=len(agent.memory.steps), input_tokens=usage.input_tokens,
-                  output_tokens=usage.output_tokens, error=error)
+            result["error"] = (error + " | " if error else "") + f"save_run failed: {exc}"
     return result

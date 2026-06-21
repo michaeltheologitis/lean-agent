@@ -1,97 +1,72 @@
-"""Tests for the benchmark loaders + the shared Problem mechanic."""
+"""Tests for problem loading + the preamble/statement split."""
 
 from __future__ import annotations
 
-from pathlib import Path
+import pytest
 
 from lean_agent import benchmarks
-from lean_agent.benchmarks import Problem, load
+from lean_agent.benchmarks import _split, load, load_experiment
 
 
-def _project(tmp_path: Path) -> Path:
-    (tmp_path / "lean-toolchain").write_text("leanprover/lean4:v4.29.1\n", encoding="utf-8")
-    return tmp_path
+def test_split_single_theorem():
+    text = "import Mathlib\nopen Nat\n\ntheorem foo (n : Nat) : n = n := by sorry\n"
+    preamble, statement, name = _split(text)
+    assert preamble == "import Mathlib\nopen Nat"
+    assert statement == "theorem foo (n : Nat) : n = n"
+    assert name == "foo"
 
 
-# --- loaders ------------------------------------------------------------------
+def test_split_target_is_last_theorem():
+    """Helper lemmas above the goal belong to the preamble; the goal is the last theorem."""
+    text = (
+        "def IsEven (n : Nat) : Prop := ∃ k, n = 2 * k\n\n"
+        "theorem helper (n : Nat) : IsEven (n + n) := ⟨n, by omega⟩\n\n"
+        "theorem target (n : Nat) : IsEven (n + n) := sorry\n"
+    )
+    preamble, statement, name = _split(text)
+    assert "def IsEven" in preamble and "theorem helper" in preamble
+    assert statement == "theorem target (n : Nat) : IsEven (n + n)"
+    assert name == "target"
 
 
-def test_putnam_loads_and_parses():
-    (p,) = load("putnam", names=["putnam_1962_a1"])
-    assert "five points" in p.informal.lower()
-    assert p.statement.startswith("theorem putnam_1962_a1")
-    assert "sorry" not in p.statement
-    assert p.benchmark == "putnam"
+def test_split_strips_doc_comment_from_preamble():
+    text = "import Mathlib\n\n/-- some informal text -/\ntheorem foo : True := sorry\n"
+    preamble, statement, _ = _split(text)
+    assert "informal text" not in preamble
+    assert statement == "theorem foo : True"
 
 
-def test_minif2f_loads_and_strips_statement():
+def test_load_minif2f():
     probs = load("minif2f")
     assert len(probs) >= 10
     p = next(x for x in probs if x.name == "mathd_algebra_116")
+    assert "import Mathlib" in p.preamble
     assert p.statement.startswith("theorem mathd_algebra_116")
-    assert "sorry" not in p.statement and p.informal == ""
+    assert "sorry" not in p.statement
 
 
-def test_smoke_loads():
-    names = {p.name for p in load("smoke")}
-    assert "smoke_true" in names
+def test_load_smoke_has_empty_preamble():
+    p = next(x for x in load("smoke") if x.name == "smoke_true")
+    assert p.preamble == ""  # core Lean, nothing to pre-load
+    assert p.statement.startswith("theorem smoke_true")
 
 
-def test_unknown_benchmark_raises():
-    import pytest
+def test_load_unknown_raises():
     with pytest.raises(ValueError):
         load("nope")
 
 
-# --- shared Problem mechanic --------------------------------------------------
+def test_load_experiment_conditions():
+    probs = load_experiment("even_self")
+    names = {p.name for p in probs}
+    assert names == {"even_self/notated", "even_self/raw"}
+    notated = next(p for p in probs if p.name == "even_self/notated")
+    assert "def IsEven" in notated.preamble and "isEven_add_self" in notated.preamble
+    raw = next(p for p in probs if p.name == "even_self/raw")
+    assert raw.preamble == "" and raw.statement.startswith("theorem target")
 
 
-def test_prepare_and_prompt(tmp_path):
-    project = _project(tmp_path)
-    prob = Problem(name="t", benchmark="smoke", project=project,
-                   stub="theorem t : True := by sorry\n", statement="theorem t : True")
-    work_file = prob.prepare(project / "_work")
-    assert work_file.read_text(encoding="utf-8") == "theorem t : True := by sorry\n"
-    prompt = prob.prompt(work_file)
-    assert "write_and_check" in prompt and str(work_file) in prompt
-
-
-def test_grade_pass(monkeypatch, tmp_path):
-    project = _project(tmp_path)
-    wf = project / "_work" / "t.lean"
-    wf.parent.mkdir()
-    wf.write_text("theorem t : True := by trivial\n", encoding="utf-8")
-    prob = Problem(name="t", benchmark="smoke", project=project, stub="",
-                   statement="theorem t : True")
-    monkeypatch.setattr(benchmarks, "compile_file", lambda *a, **k: "status: compiled successfully\n")
-    g = prob.grade(wf)
-    assert g["passed"] and g["reason"] == "ok" and not g["statement_changed"]
-
-
-def test_grade_rejects_sorry_without_compiling(monkeypatch, tmp_path):
-    project = _project(tmp_path)
-    wf = project / "_work" / "t.lean"
-    wf.parent.mkdir()
-    wf.write_text("theorem t : True := by sorry\n", encoding="utf-8")
-    prob = Problem(name="t", benchmark="smoke", project=project, stub="",
-                   statement="theorem t : True")
-    called = {"n": 0}
-
-    def boom(*a, **k):
-        called["n"] += 1
-        return "status: compiled successfully"
-
-    monkeypatch.setattr(benchmarks, "compile_file", boom)
-    g = prob.grade(wf)
-    assert not g["passed"] and "sorry" in g["reason"] and called["n"] == 0
-
-
-def test_grade_flags_statement_changed(monkeypatch, tmp_path):
-    project = _project(tmp_path)
-    wf = project / "_work" / "t.lean"
-    wf.parent.mkdir()
-    wf.write_text("theorem t : False := by trivial\n", encoding="utf-8")
-    prob = Problem(name="t", benchmark="smoke", project=project, stub="",
-                   statement="theorem t : True")
-    monkeypatch.setattr(benchmarks, "compile_file", lambda *a, **k: "status: compiled successfully\n")
-    assert prob.grade(wf)["statement_changed"]
+def test_prompt_mentions_tool_and_goal():
+    (p,) = load_experiment("even_self", names=["raw"])
+    prompt = p.prompt()
+    assert "lean_check" in prompt and "∃ k, n + n = 2 * k" in prompt

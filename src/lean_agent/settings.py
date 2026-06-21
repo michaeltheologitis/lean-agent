@@ -12,9 +12,12 @@ Resolution order per field (first non-empty wins):
     api_base  : OPENAI_API_BASE → OPENAI_BASE_URL → NEBIUS_API_BASE
                 → TOKEN_FACTORY_BASE_URL → https://api.openai.com/v1
 
-To run against OpenAI: set `OPENAI_API_KEY` (model/base default correctly). To run against
-Nebius/Token Factory instead: leave `OPENAI_API_KEY` empty and set the provider's key +
-model + base.
+Lean (for the LeanInteract backend):
+
+    lean_version : LEAN_VERSION → v4.29.1   (used for core-Lean tasks + temp Mathlib projects)
+    lean_project : LEAN_PROJECT → None      (path to a *built* Mathlib Lean project to compile
+                                             Mathlib tasks against; if unset, a temp Mathlib
+                                             project is built on demand)
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODEL_ID = "gpt-5.4-nano"
 DEFAULT_API_BASE = "https://api.openai.com/v1"
+DEFAULT_LEAN_VERSION = "v4.29.1"
 
 
 @dataclass(frozen=True)
@@ -41,6 +45,8 @@ class Settings:
     api_key: str | None = None
     model_id: str = DEFAULT_MODEL_ID
     api_base: str | None = DEFAULT_API_BASE
+    lean_version: str = DEFAULT_LEAN_VERSION
+    lean_project: str | None = None
     log_dir: Path = PROJECT_ROOT / "logs"
 
 
@@ -63,6 +69,8 @@ def get_settings() -> Settings:
         api_base=_first_env(
             "OPENAI_API_BASE", "OPENAI_BASE_URL", "NEBIUS_API_BASE", "TOKEN_FACTORY_BASE_URL"
         ) or DEFAULT_API_BASE,
+        lean_version=_first_env("LEAN_VERSION") or DEFAULT_LEAN_VERSION,
+        lean_project=_first_env("LEAN_PROJECT"),
     )
     settings.log_dir.mkdir(parents=True, exist_ok=True)
     return settings

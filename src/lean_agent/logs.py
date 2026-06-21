@@ -72,6 +72,7 @@ def _markdown(agent, answer, meta, usage) -> str:
             continue
         output = _text(getattr(step, "model_output", "") or "")
         code = getattr(step, "code_action", None)
+        tool_calls = getattr(step, "tool_calls", None)
         observations = getattr(step, "observations", None)
         tu = getattr(step, "token_usage", None)
         lines += [f"## Step {getattr(step, 'step_number', '?')}", ""]
@@ -79,6 +80,11 @@ def _markdown(agent, answer, meta, usage) -> str:
             lines += ["**Model output**", "", output, ""]
         if code:
             lines += ["**Code run**", "", "```python", str(code).strip(), "```", ""]
+        elif tool_calls:
+            rendered = "\n".join(
+                f"{getattr(tc, 'name', '?')}({getattr(tc, 'arguments', '')})" for tc in tool_calls
+            )
+            lines += ["**Tool call**", "", "```", rendered.strip(), "```", ""]
         if observations:
             lines += ["**Lean output**", "", "```", _text(observations).strip(), "```", ""]
         if tu:
