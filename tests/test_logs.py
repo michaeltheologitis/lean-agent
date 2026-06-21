@@ -93,7 +93,7 @@ class FakeAgent:
 
 
 def _stub(monkeypatch, tmp_path):
-    s = Settings(api_key=None, model_id="gpt-5.4-nano",
+    s = Settings(api_key=None, model_id="gpt-5.4-mini",
                  api_base="https://api.openai.com/v1", log_dir=tmp_path)
     monkeypatch.setattr(logs_module, "get_settings", lambda: s)
 
@@ -121,7 +121,7 @@ def test_transcript_is_ordered_lineage(monkeypatch, tmp_path):
     _stub(monkeypatch, tmp_path)
     run_dir = logs_module.save_run(FakeAgent(), "done", run_id="t-log")
     t = yaml.safe_load((run_dir / "transcript.yaml").read_text())
-    assert t["model_id"] == "gpt-5.4-nano"
+    assert t["model_id"] == "gpt-5.4-mini"
     roles = [m["role"] for m in t["messages"]]
     assert roles[0] == "system"
     assert "user" in roles and "tool-call" in roles and "tool-response" in roles

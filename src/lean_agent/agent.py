@@ -30,7 +30,7 @@ INSTRUCTIONS = (
 
 
 def build_model(**kwargs):
-    """Build the configured model (OpenAI `gpt-5.4-nano` by default). `kwargs` pass through
+    """Build the configured model (OpenAI `gpt-5.4-mini` by default). `kwargs` pass through
     to `OpenAIServerModel` — e.g. `max_tokens=` for a provider that needs a cap."""
     s = get_settings()
     if not s.api_key:

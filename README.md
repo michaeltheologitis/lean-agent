@@ -52,7 +52,7 @@ elan default leanprover/lean4:v4.29.1
 ```
 
 The first agent run builds the Lean REPL (one-time, cached). Settings are **OpenAI-first**
-(default `gpt-5.4-nano`); to use another OpenAI-compatible provider, leave `OPENAI_API_KEY`
+(default `gpt-5.4-mini`); to use another OpenAI-compatible provider, leave `OPENAI_API_KEY`
 empty and set `NEBIUS_*` / `TOKEN_FACTORY_*` (see [settings.py](src/lean_agent/settings.py)).
 
 ## Run the experiment (the hypothesis test)

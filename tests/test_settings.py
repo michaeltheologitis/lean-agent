@@ -22,7 +22,7 @@ def _fresh(monkeypatch):
 def test_dataclass_defaults():
     s = settings_module.Settings()
     assert s.api_key is None
-    assert s.model_id == settings_module.DEFAULT_MODEL_ID == "gpt-5.4-nano"
+    assert s.model_id == settings_module.DEFAULT_MODEL_ID == "gpt-5.4-mini"
     assert s.api_base == settings_module.DEFAULT_API_BASE == "https://api.openai.com/v1"
     assert s.log_dir == settings_module.PROJECT_ROOT / "logs"
 
@@ -31,7 +31,7 @@ def test_no_key_defaults_to_openai(monkeypatch):
     _fresh(monkeypatch)
     s = settings_module.get_settings()
     assert s.api_key is None
-    assert s.model_id == "gpt-5.4-nano"
+    assert s.model_id == "gpt-5.4-mini"
     assert s.api_base == "https://api.openai.com/v1"
 
 
