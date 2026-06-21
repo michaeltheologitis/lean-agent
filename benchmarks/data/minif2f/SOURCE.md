@@ -7,10 +7,9 @@ for provenance.
 - **Split:** `MiniF2F/Valid/` (the dev split; `Test/` is held out and intentionally not
   vendored)
 - **Lean / Mathlib:** `leanprover/lean4:v4.24.0`, Mathlib `v4.24.0`
-- **Subset:** a deterministic slice — first 8 `mathd_algebra_*`, 6 `mathd_numbertheory_*`,
-  2 `induction_*`, 2 `amc12a_*` (sorted by name). Easy→medium, chosen so a weak model has a
-  real chance on some. Regenerate/extend with `scripts/import_minif2f.py` (or re-copy from the
-  source repo).
+- **Subset:** just **3 example** problems (`mathd_algebra_10`, `mathd_algebra_116`,
+  `mathd_numbertheory_101`) — enough to see the shape. Copy more from the source repo's
+  `MiniF2F/Valid/` into this folder if you want a bigger run.
 
 Each file is self-contained (`import Mathlib`, `set_option maxHeartbeats 0`, an `open`, one
 `theorem ... := by sorry`).

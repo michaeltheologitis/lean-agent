@@ -5,9 +5,9 @@ ground-truth answers stripped, so each is a `sorry`-stub the agent fills in.
 
 - **Source:** PutnamBench (https://github.com/trishullab/PutnamBench), Lean 4 split
 - **Lean / Mathlib:** authored against PutnamBench's Lean project, **Mathlib v4.27.0**
-- **Subset:** a small curated set of **proof-only** problems (no `..._solution` def to guess),
-  one per few years, 1962–2022 — enough for quick offline use. The full 672-problem set comes
-  with the PutnamBench checkout you clone to grade (below), so we don't vendor all of it.
+- **Subset:** just **3 example** proof-only problems (no `..._solution` def to guess), spanning
+  1962–2013 — enough to see the shape. The full 672-problem set comes with the PutnamBench
+  checkout you clone to grade (below), so we don't vendor more.
 - **Extraction:** PutnamBench's own loader enumerated the problems; the ground-truth answer
   comment after each `..._solution := sorry` was removed.
 

@@ -39,7 +39,7 @@ def test_split_strips_comments_from_preamble():
 
 def test_load_minif2f():
     probs = load("minif2f")
-    assert len(probs) >= 10
+    assert len(probs) == 3
     p = next(x for x in probs if x.name == "mathd_algebra_116")
     assert "import Mathlib" in p.preamble
     assert p.statement.startswith("theorem mathd_algebra_116") and "sorry" not in p.statement
