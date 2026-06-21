@@ -91,22 +91,43 @@ before compiling).
 - **Whether the model solves anything non-trivial.** Expected to be ~0 on Putnam with a small
   model; MiniF2F is where we'll get real signal.
 
+## The experiment harness (the hypothesis test — now built)
+
+We integrated **[LeanInteract](https://github.com/augustepoiroux/LeanInteract)** (a Python
+wrapper over the Lean REPL) as the Lean backend, because it gives **persistent environments** —
+exactly what the hypothesis needs. The agent no longer compiles whole files via a subprocess;
+it proves against a **pre-warmed environment**:
+
+- A problem's **preamble** (imports + definitions/lemmas) is run once to build a base
+  environment; every proof attempt runs *in* it. The same preamble is appended to the model's
+  **system prompt**. So a single definition block pre-warms *both* Lean and the LLM — the knob
+  the hypothesis turns.
+- An **experiment** is `data/experiments/<name>/` with one `.lean` file per **condition**
+  (e.g. `notated.lean` vs `raw.lean`). `run.py --experiment <name>` runs each condition with
+  the same agent and compares. Making one is just dropping two files — no code.
+- Grading is **structured** (LeanInteract returns errors/`sorries`/goals), so the regex
+  `sorry` check is gone, and the agent sees the *remaining goal* when a proof is incomplete.
+- We switched `CodeAgent → ToolCallingAgent`: with a CodeAgent the model writes Python and kept
+  emitting bare Lean that the Python parser rejected (one run spiralled for 7 steps fighting a
+  phantom "unicode" error). Tool calls pass Lean as a string — that failure class is gone.
+
+**Live, end-to-end:** the example `even_self` experiment runs on this machine (core Lean, no
+Mathlib) — gpt-5.4-nano solves both conditions, the raw (no-definitions) condition taking more
+steps. This proves the machinery; the real study needs Mathlib definitions + a built project.
+
 ## Next steps (concrete)
 
-1. **Run the MiniF2F baseline on a Mathlib machine.** Clone + cache `miniF2F-lean4`, run
-   `--benchmark minif2f --n 10..20`. This gives the first real number on `gpt-5.4-nano` and a
-   set of inspectable failures to deep-dive.
-2. **Wire the advanced Lean tools into the agent** (the missing Evan piece). `lean-lsp-mcp`
-   already exposes premise/lemma search (`leansearch`, `loogle`, `lean_goal`); the agent
-   currently gets none of them. Add them behind a flag and compare with/without.
-3. **`lean_goal` (proof state)** as a `--sighted` option — it worked in the old script; just
-   isn't in the baseline yet (kept the baseline dependency-light).
-4. **For the ~June-25 notation hypothesis:** the harness is ready — point a benchmark adapter
-   at the book's tasks in two conditions (raw vs. notated) and compare logs. The old
-   `notation_pilot.py` (removed; in git history on `gcd-lean-tools-extra`) is a reusable
-   template for the two-condition design.
+1. **Author the real experiment(s)** from the book tasks: for each, a `notated.lean` (using the
+   book's definitions/abstractions) and a `raw.lean` (desugared), both compiling against a
+   built Mathlib project (`LEAN_PROJECT`). Run `--experiment <name>`, then **deep-dive the
+   `run.md`s**: where does the raw condition get stuck that the notated one doesn't?
+2. **Run a MiniF2F baseline** on a Mathlib machine (`--benchmark minif2f --n 10..20`) for a
+   reference number + inspectable failures.
+3. **More "correct" Lean tools** (optional, behind the same tool seam): LeanInteract's tactic
+   mode gives goal states step-by-step; `lean-lsp-mcp` adds premise/lemma search
+   (`leansearch`, `loogle`). Add and compare with/without.
 
 ## How to run it
 
-See `README.md`. Shortest path to see it work: `uv run pytest -q`, then install `elan` and
-`uv run python run.py --benchmark smoke`, then read a `run.md`.
+See `README.md`. Shortest path: `uv run pytest -q`, then set up `elan` (incl. `elan default
+…`) and `uv run python run.py --experiment even_self`, then read a `run.md`.
