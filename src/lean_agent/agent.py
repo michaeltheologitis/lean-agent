@@ -68,7 +68,8 @@ def solve(problem: Problem, *, lean: Lean, model=None, max_steps: int = 6, save:
     record = {"passed": False}
     lean_check = make_lean_check(lean, base_env, problem.statement, record)
     agent = ToolCallingAgent([lean_check], model=model or build_model(),
-                             max_steps=max_steps, instructions=_system_prompt(problem))
+                             max_steps=max_steps, instructions=_system_prompt(problem),
+                             verbosity_level=0)  # quiet — the runner/caller prints its own summary
 
     error = None
     answer = ""

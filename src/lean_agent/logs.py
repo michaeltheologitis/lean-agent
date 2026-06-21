@@ -25,6 +25,22 @@ import yaml
 from .settings import get_settings
 
 
+class _ReadableDumper(yaml.SafeDumper):
+    """YAML dumper that renders multi-line strings as literal blocks (`|`) instead of
+    quoted strings full of `\\n` and line-continuation backslashes."""
+
+
+def _represent_str(dumper, data):
+    if "\n" in data:
+        # rstrip each line so PyYAML can use literal block style (trailing spaces force quotes)
+        data = "\n".join(line.rstrip() for line in data.split("\n"))
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+
+_ReadableDumper.add_representer(str, _represent_str)
+
+
 def _text(value) -> str:
     """ChatMessage content is a string or a list of `{type, text}` parts — flatten to text."""
     if isinstance(value, str):
@@ -43,7 +59,16 @@ def _messages(agent) -> list[dict[str, str]]:
     raw = list(agent.memory.system_prompt.to_messages())
     for step in agent.memory.steps:
         raw.extend(step.to_messages())
-    return [{"role": m.role.value, "content": _text(m.content)} for m in raw]
+    out = []
+    for m in raw:
+        role = m.role.value
+        content = _text(m.content)
+        if role == "tool-call":
+            # the tool-call message is a repr of the call, so newlines in the Lean `code`
+            # argument come out as literal `\n` — turn them back into real line breaks.
+            content = content.replace("\\n", "\n")
+        out.append({"role": role, "content": content})
+    return out
 
 
 def save_run(agent, answer, *, run_id: str | None = None, manifest: dict | None = None) -> Path:
@@ -72,5 +97,6 @@ def save_run(agent, answer, *, run_id: str | None = None, manifest: dict | None 
     )
     transcript = {**meta, "answer": str(answer), "usage": usage, "messages": _messages(agent)}
     with (run_dir / "transcript.yaml").open("w", encoding="utf-8") as f:
-        yaml.safe_dump(transcript, f, sort_keys=False, allow_unicode=True, width=100)
+        yaml.dump(transcript, f, Dumper=_ReadableDumper, sort_keys=False,
+                  allow_unicode=True, default_flow_style=False, width=10 ** 9)
     return run_dir

@@ -60,7 +60,7 @@ class Monitor:
 
 class SystemPrompt:
     def to_messages(self):
-        return [Msg("system", "you are a prover")]
+        return [Msg("system", "you are a prover\nwith a multi-line\nsystem prompt")]
 
 
 class Memory:
@@ -126,3 +126,9 @@ def test_transcript_is_ordered_lineage(monkeypatch, tmp_path):
     assert roles[0] == "system"
     assert "user" in roles and "tool-call" in roles and "tool-response" in roles
     assert any("lean_check" in m["content"] for m in t["messages"])
+    # readability: multi-line content renders as a real block (no escaped `\n`), and the
+    # value round-trips intact when parsed back.
+    raw = (run_dir / "transcript.yaml").read_text()
+    assert "\\n" not in raw
+    sys_content = next(m["content"] for m in t["messages"] if m["role"] == "system")
+    assert sys_content == "you are a prover\nwith a multi-line\nsystem prompt"
