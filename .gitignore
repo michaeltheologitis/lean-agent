@@ -30,6 +30,13 @@ logs/
 # PutnamBench checkout (problems live on disk, not tracked)
 /PutnamBench/
 
-# Experiment records (kept locally, not committed)
-experiments/results_*.json
-experiments/putnam_results*.jsonl
+# Experiment / benchmark run records (kept locally, not committed)
+results/
+*.results.jsonl
+
+# Local working docs (grounded-reasoning style; decoupled from the upstream repo,
+# intentionally NOT committed). Live working memory for whoever drives the repo.
+/CLAUDE.md
+/STATUS.md
+/PROGRESS.md
+/.claude/
