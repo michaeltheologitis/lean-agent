@@ -1,11 +1,9 @@
-"""Tests for run persistence + clean logs, driven by a minimal fake agent (no API)."""
+"""Tests for run logging, driven by a minimal fake agent (no API)."""
 
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-
-import yaml
 
 from lean_agent import logs as logs_module
 from lean_agent.settings import Settings
@@ -15,30 +13,20 @@ from lean_agent.settings import Settings
 class Usage:
     input_tokens: int
     output_tokens: int
-    total_tokens: int
 
 
-class Role:
-    def __init__(self, value):
-        self.value = value
-
-
-class Msg:
-    def __init__(self, role, content):
-        self.role = Role(role)
-        self.content = content
-
-
-class Step:
-    def __init__(self, *, task=None, usage=None, inputs=None, output=None, messages=None):
+class TaskStep:
+    def __init__(self, task):
         self.task = task
-        self.token_usage = usage
-        self.model_input_messages = inputs or []
-        self.model_output = output
-        self._messages = messages or []
 
-    def to_messages(self):
-        return self._messages
+
+class ActionStep:
+    def __init__(self, *, step_number, model_output, code_action, observations, token_usage):
+        self.step_number = step_number
+        self.model_output = model_output
+        self.code_action = code_action
+        self.observations = observations
+        self.token_usage = token_usage
 
 
 class Total:
@@ -47,101 +35,70 @@ class Total:
 
 
 class Monitor:
-    def __init__(self, i, o):
-        self._t = Total(i, o)
-
     def get_total_token_counts(self):
-        return self._t
-
-
-class SystemPrompt:
-    def __init__(self, messages):
-        self._m = messages
-
-    def to_messages(self):
-        return self._m
+        return Total(100, 40)
 
 
 class Memory:
-    def __init__(self, steps, system_prompt):
+    def __init__(self, steps):
         self.steps = steps
-        self.system_prompt = system_prompt
+
+    def get_full_steps(self):
+        # smolagents returns serializable step dicts natively; emulate that.
+        out = []
+        for s in self.steps:
+            if isinstance(s, TaskStep):
+                out.append({"task": s.task})
+            else:
+                out.append({"step_number": s.step_number, "model_output": s.model_output,
+                            "code_action": s.code_action, "observations": s.observations,
+                            "token_usage": {"input_tokens": s.token_usage.input_tokens,
+                                            "output_tokens": s.token_usage.output_tokens}})
+        return out
 
 
 class FakeAgent:
-    def __init__(self, memory, monitor, tools):
-        self.memory = memory
-        self.monitor = monitor
-        self.tools = tools
+    def __init__(self):
+        self.memory = Memory([
+            TaskStep("Prove smoke_true."),
+            ActionStep(step_number=1, model_output="I'll fill it in.",
+                       code_action="write_and_check(file_path='x.lean', content='theorem t : True := by trivial')",
+                       observations="status: compiled successfully", token_usage=Usage(100, 40)),
+        ])
+        self.monitor = Monitor()
 
 
-def _agent():
-    task_step = Step(task="Prove smoke_true.")
-    action_step = Step(
-        usage=Usage(100, 40, 140),
-        inputs=[Msg("system", "you are a prover"), Msg("user", "Prove smoke_true.")],
-        output="I'll fill it in.\n```python\nwrite_and_check('theorem smoke_true : True := by trivial')\n```",
-        messages=[Msg("assistant", "calling tool"), Msg("tool-response", "status: compiled successfully")],
-    )
-    memory = Memory([task_step, action_step], SystemPrompt([Msg("system", "you are a prover")]))
-    return FakeAgent(memory, Monitor(100, 40), {"write_and_check": None, "final_answer": None})
+def _stub_settings(monkeypatch, tmp_path):
+    s = Settings(api_key=None, model_id="gpt-5.4-nano",
+                 api_base="https://api.openai.com/v1", log_dir=tmp_path)
+    monkeypatch.setattr(logs_module, "get_settings", lambda: s)
 
 
-def test_save_run_writes_four_files(monkeypatch, tmp_path):
-    stub = Settings(api_key=None, model_id="gpt-5.4-nano",
-                    api_base="https://api.openai.com/v1", log_dir=tmp_path)
-    monkeypatch.setattr(logs_module, "get_settings", lambda: stub)
-
-    run_dir = logs_module.save_run(
-        _agent(), "done", run_id="t-logtest",
-        extra_manifest={"benchmark": "smoke", "problem": "smoke_true", "passed": True},
-    )
-    assert run_dir.parent == tmp_path and run_dir.name.endswith("-t-logtest")
-    assert {p.name for p in run_dir.iterdir()} == {
-        "run.json", "transcript.yaml", "clean_log.json", "clean_log.md"
-    }
+def test_save_run_writes_two_files(monkeypatch, tmp_path):
+    _stub_settings(monkeypatch, tmp_path)
+    run_dir = logs_module.save_run(FakeAgent(), "done", run_id="t-log",
+                                   manifest={"benchmark": "smoke", "passed": True})
+    assert run_dir.parent == tmp_path and run_dir.name.endswith("-t-log")
+    assert {p.name for p in run_dir.iterdir()} == {"run.json", "run.md"}
 
 
-def test_run_json_structure_and_manifest(monkeypatch, tmp_path):
-    stub = Settings(api_key=None, model_id="gpt-5.4-nano",
-                    api_base="https://api.openai.com/v1", log_dir=tmp_path)
-    monkeypatch.setattr(logs_module, "get_settings", lambda: stub)
-
-    run_dir = logs_module.save_run(
-        _agent(), "done", run_id="t-logtest",
-        extra_manifest={"benchmark": "smoke", "passed": True},
-    )
+def test_run_json_structure(monkeypatch, tmp_path):
+    _stub_settings(monkeypatch, tmp_path)
+    run_dir = logs_module.save_run(FakeAgent(), "done", run_id="t-log",
+                                   manifest={"benchmark": "smoke"})
     data = json.loads((run_dir / "run.json").read_text())
-    assert set(data) == {"manifest", "prompt", "answer", "logs"}
+    assert set(data) == {"manifest", "answer", "usage", "steps"}
     assert data["manifest"]["benchmark"] == "smoke"
     assert data["manifest"]["model_id"] == "gpt-5.4-nano"
-    assert data["prompt"] == "Prove smoke_true."
-    total = data["logs"]["total_usage"]
-    assert total == {"input_tokens": 100, "output_tokens": 40, "total_tokens": 140}
-    assert len(data["logs"]["steps"]) == 1  # the TaskStep (no usage) is skipped
+    assert data["usage"] == {"input_tokens": 100, "output_tokens": 40, "total_tokens": 140}
+    assert len(data["steps"]) == 2
 
 
-def test_clean_log_shows_output_and_calls(monkeypatch, tmp_path):
-    stub = Settings(api_key=None, model_id="gpt-5.4-nano",
-                    api_base="https://api.openai.com/v1", log_dir=tmp_path)
-    monkeypatch.setattr(logs_module, "get_settings", lambda: stub)
-
-    run_dir = logs_module.save_run(_agent(), "done", run_id="t-logtest")
-    md = (run_dir / "clean_log.md").read_text()
-    assert "## Final Answer" in md and "done" in md
-    assert "write_and_check" in md  # the tool call was surfaced
-    clean = json.loads((run_dir / "clean_log.json").read_text())
-    calls = [c for s in clean["steps"] for c in s["python_calls"]]
-    assert any("write_and_check" in c for c in calls)
-
-
-def test_transcript_roles(monkeypatch, tmp_path):
-    stub = Settings(api_key=None, model_id="gpt-5.4-nano",
-                    api_base="https://api.openai.com/v1", log_dir=tmp_path)
-    monkeypatch.setattr(logs_module, "get_settings", lambda: stub)
-
-    run_dir = logs_module.save_run(_agent(), "done", run_id="t-logtest")
-    transcript = yaml.safe_load((run_dir / "transcript.yaml").read_text())
-    roles = [m["role"] for m in transcript["messages"]]
-    assert roles[0] == "system"
-    assert "tool-response" in roles
+def test_run_md_is_readable(monkeypatch, tmp_path):
+    _stub_settings(monkeypatch, tmp_path)
+    run_dir = logs_module.save_run(FakeAgent(), "done", run_id="t-log")
+    md = (run_dir / "run.md").read_text()
+    assert "## Task" in md and "Prove smoke_true." in md
+    assert "write_and_check" in md          # the code it ran, from step.code_action
+    assert "compiled successfully" in md    # the Lean output, from step.observations
+    assert "## Final answer" in md and "done" in md
