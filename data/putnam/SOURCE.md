@@ -14,6 +14,13 @@ Two task types (see `benchmarks/putnam.py`):
 - **answer_proof** — also has `abbrev ..._solution := sorry`; the closed-form answer was
   stripped, so the agent would have to *guess* it. `putnam.load()` defaults to proof-only.
 
-**Grading caveat:** to grade these you need a built Lean project at the matching Mathlib
-version (v4.27.0). The repo's `lean_project/` is a different pin — point `--project` at a
-v4.27.0 project before trusting grades.
+**Grading:** clone PutnamBench as a sibling and build its Lean project, then run the agent:
+
+```sh
+git clone https://github.com/trishullab/PutnamBench    # next to this repo, gitignored
+cd PutnamBench/lean4 && lake exe cache get && cd -
+uv run python scripts/run.py --benchmark putnam --n 5  # defaults --project to ../PutnamBench/lean4
+```
+
+The vendored statements were extracted from PutnamBench, so they compile at its Mathlib
+(v4.27.0).

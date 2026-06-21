@@ -15,6 +15,12 @@ for provenance.
 Each file is self-contained (`import Mathlib`, `set_option maxHeartbeats 0`, an `open`, one
 `theorem ... := by sorry`).
 
-**Grading caveat:** to grade these you need a built Lean project at the matching Mathlib
-version (v4.24.0). The repo's `lean_project/` is a different pin — point `--project` at a
-v4.24.0 project before trusting grades.
+**Grading:** clone the source repo as a sibling and build it, then run the agent against it:
+
+```sh
+git clone https://github.com/yangky11/miniF2F-lean4    # next to this repo, gitignored
+cd miniF2F-lean4 && lake exe cache get && cd -
+uv run python scripts/run.py --benchmark minif2f --n 5  # defaults --project to ../miniF2F-lean4
+```
+
+The vendored statements came from that repo, so they compile at its Mathlib (v4.24.0).

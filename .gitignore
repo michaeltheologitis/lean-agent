@@ -27,8 +27,11 @@ logs/
 .idea/
 .vscode/
 
-# PutnamBench checkout (problems live on disk, not tracked)
+# Benchmark grading projects: sibling source checkouts built locally with
+# `lake exe cache get`. The vendored statements live in data/; these are the
+# matching-Mathlib Lean projects the agent compiles against.
 /PutnamBench/
+/miniF2F-lean4/
 
 # Experiment / benchmark run records (kept locally, not committed)
 results/

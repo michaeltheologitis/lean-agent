@@ -22,7 +22,10 @@ from ..settings import PROJECT_ROOT
 from . import Problem
 
 DATA_DIR = PROJECT_ROOT / "data" / "minif2f"
-LEAN_PROJECT = PROJECT_ROOT / "lean_project"
+# Default grading project: a sibling miniF2F-lean4 checkout (gitignored). Clone it and run
+# `lake exe cache get` so the vendored statements compile at their own Mathlib (v4.24.0).
+# Override with `--project` / `load(project=)` to point elsewhere.
+LEAN_PROJECT = PROJECT_ROOT / "miniF2F-lean4"
 
 
 def _formal_statement(text: str, name: str) -> str:

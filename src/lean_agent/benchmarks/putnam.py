@@ -25,7 +25,10 @@ from ..settings import PROJECT_ROOT
 from . import Problem
 
 DATA_DIR = PROJECT_ROOT / "data" / "putnam"
-LEAN_PROJECT = PROJECT_ROOT / "lean_project"
+# Default grading project: a sibling PutnamBench checkout (gitignored). Clone it and run
+# `lake exe cache get` so the vendored statements compile at their own Mathlib (v4.27.0).
+# Override with `--project` / `load(project=)` to point elsewhere.
+LEAN_PROJECT = PROJECT_ROOT / "PutnamBench" / "lean4"
 
 _YEAR_RE = re.compile(r"putnam_(\d{4})_([ab]\d+)", re.IGNORECASE)
 _SOLUTION_RE = re.compile(r"^(abbrev|def)\s+\S*_solution\b")
