@@ -1,133 +1,112 @@
 # lean-agent
 
-This branch wires a small [smolagents](https://github.com/huggingface/smolagents)
-`CodeAgent` to Lean through one deliberately narrow tool:
-`lean_check_compiles`.
+A **common, inspectable baseline theorem-proving agent** for Lean 4 — one agent the whole
+team runs, so results are comparable. It wires a [smolagents](https://github.com/huggingface/smolagents)
+`CodeAgent` to Lean through a small tool surface, runs it over a benchmark, and logs
+everything so you can see exactly what the model saw and did.
 
-The repository includes a standalone Lean project in `lean_project/` that
-depends on Mathlib. The example task asks the agent to replace a `sorry` in:
+The goal of this milestone is the **harness**, not a high proof rate: a single agent
+everyone can run and compare, with complete logs. A fully-logged failure is a useful result.
 
-```text
-lean_project/Problems/LeanWorkbookPlus2.lean
+## How it works
+
+```
+model (OpenAI gpt-5.4-nano)
+   │
+   ▼
+build_agent ──tools──▶ write_and_check(content)   # write the whole file + compile, return Lean output
+   │
+   ▼
+solve(problem) ──▶ agent iterates on the compiler output ──▶ candidate .lean file
+   │
+   ▼
+grade ──▶ compiles AND no sorry/admit            (+ advisory statement_changed flag)
+   │
+   ▼
+logs/<run>/{run.json, transcript.yaml, clean_log.json, clean_log.md}
 ```
 
-The test harness then writes the agent's candidate proof to an ignored scratch
-file and validates it with `lake env lean`.
+- **One agent** (`lean_agent.agent`): `build_agent()` + `solve()`. Parameterized, not forked.
+- **Lean tools** (`lean_agent.lean`): `lean_check_compiles` and the agent's editing loop
+  `write_and_check`. A file with `sorry` compiles with only a *warning* (exit 0) — the tool
+  flags that explicitly so a complete-looking compile isn't mistaken for a solved problem.
+- **Benchmarks** (`lean_agent.benchmarks`): decoupled adapters over one shared `Problem`
+  mechanic — `smoke` (core Lean, no Mathlib), `putnam`, `minif2f`. Statements are vendored
+  under `data/`; the harness grades by compiling them in a Lean project.
+- **Logs are the product** (`lean_agent.logs`): every run writes the raw record
+  (`run.json`, `transcript.yaml`) and a readable per-step distillation (`clean_log.md`).
 
 ## Requirements
 
-- Python 3.12
-- `uv`
-- Lean/Lake through `elan`
-- a Token Factory API key
-
-The default configured model is:
-
-```dotenv
-NEBIUS_MODEL_ID='deepseek-ai/DeepSeek-V3.2-fast'
-NEBIUS_API_BASE='https://api.tokenfactory.nebius.com/v1/'
-```
-
-Token Factory did not list `deepseek-v4-flash` on this endpoint when checked.
-It did list `deepseek-ai/DeepSeek-V4-Pro`; set `NEBIUS_MODEL_ID` to that if you
-want to test the V4 model instead of the fast default.
+- Python 3.12 + [`uv`](https://docs.astral.sh/uv/)
+- An OpenAI API key (`OPENAI_API_KEY`) for `gpt-5.4-nano`
+- Lean via [`elan`](https://github.com/leanprover/elan) — only needed to actually compile
 
 ## Setup
 
-From the repository root:
-
 ```sh
 uv sync
-cp .env.example .env
+cp .env.example .env      # then put your OPENAI_API_KEY in .env
 ```
 
-Edit `.env` and add your key:
+Settings are **OpenAI-first** (default model `gpt-5.4-nano`). To use another
+OpenAI-compatible provider, leave `OPENAI_API_KEY` empty and set `NEBIUS_*` /
+`TOKEN_FACTORY_*` instead (see `src/lean_agent/settings.py`).
 
-```dotenv
-NEBIUS_API_KEY='...'
-NEBIUS_MODEL_ID='deepseek-ai/DeepSeek-V3.2-fast'
-NEBIUS_API_BASE='https://api.tokenfactory.nebius.com/v1/'
-```
+## Run it
 
-`TOKEN_FACTORY_API_KEY` is also accepted as an alias.
-
-## Set Up The Lean Project
-
-The Lean project is intentionally separate from the Python package:
-
-```text
-lean_project/
-    lakefile.lean
-    lake-manifest.json
-    lean-toolchain
-    Problems/LeanWorkbookPlus2.lean
-```
-
-Fetch Mathlib's compiled cache:
+**Unit tests** (no API, no Lean — always run):
 
 ```sh
-cd lean_project
-lake exe cache get
-lake env lean Problems/LeanWorkbookPlus2.lean
-cd ..
+uv run pytest -q
 ```
 
-The last command should succeed and print a warning that the declaration uses
-`sorry`. That is expected; this file is the problem the agent will solve.
-
-## Run The Agent Example
-
-Run the model-backed test:
+**Live end-to-end** with `gpt-5.4-nano` on the `smoke` benchmark (core Lean, no Mathlib).
+Install a Lean toolchain first, then:
 
 ```sh
-uv run pytest tests/test_lean_workbook_agent_e2e.py -q
+curl -sSf https://elan.lean-lang.org/elan-init.sh | sh -s -- -y   # one-time
+export PATH="$HOME/.elan/bin:$PATH"
+uv run python scripts/run.py --benchmark smoke --max-steps 4
 ```
 
-That test:
+This is the fast plumbing check — it confirms the model ↔ Lean ↔ logs loop works without a
+multi-GB Mathlib build. Then read `logs/<run-folder>/clean_log.md`.
 
-1. reads `lean_project/Problems/LeanWorkbookPlus2.lean`;
-2. asks the agent for a proof replacing the `sorry`;
-3. rejects answers containing `sorry`, `admit`, or `axiom`;
-4. writes the candidate to `lean_project/AgentOutput.lean`;
-5. checks it with `lean_check_compiles`;
-6. deletes `AgentOutput.lean` unless `KEEP_AGENT_LEAN_OUTPUT=1` is set.
-
-To inspect the generated proof after a run:
+**Real benchmarks** (`putnam`, `minif2f`) need a built Mathlib project at the matching
+version. Each benchmark defaults to a gitignored sibling checkout of its own source repo:
 
 ```sh
-KEEP_AGENT_LEAN_OUTPUT=1 uv run pytest tests/test_lean_workbook_agent_e2e.py -q
+# MiniF2F (Mathlib v4.24.0) — the right benchmark for weak models (easy problems)
+git clone https://github.com/yangky11/miniF2F-lean4
+cd miniF2F-lean4 && lake exe cache get && cd -
+uv run python scripts/run.py --benchmark minif2f --n 5
+
+# PutnamBench (Mathlib v4.27.0) — hard; expect low pass rates with a small model
+git clone https://github.com/trishullab/PutnamBench
+cd PutnamBench/lean4 && lake exe cache get && cd -
+uv run python scripts/run.py --benchmark putnam --n 5
 ```
 
-`lean_project/AgentOutput.lean` is ignored by Git.
+Override the project with `--project /path/to/lean-project`. See `data/<name>/SOURCE.md` for
+provenance and exact versions.
 
-## Playground
+## Layout
 
-The notebook uses the same settings loader as the tests:
-
-```sh
-uv run jupyter lab playground.ipynb
+```
+src/lean_agent/
+  settings.py            # OpenAI-first config
+  agent.py               # build_agent + solve — the shared agent
+  lean.py                # lean_check_compiles + write_and_check
+  logs.py                # run.json / transcript.yaml / clean_log.{json,md}
+  benchmarks/{putnam,minif2f,smoke}.py
+data/{putnam,minif2f,smoke}/   # vendored statements (+ SOURCE.md)
+lean_project_core/             # tiny core-only Lean project for smoke
+scripts/run.py                 # the CLI
+tests/                         # unit tests (no API/Lean)
 ```
 
-Use it for manual experiments with `CodeAgent`, `OpenAIServerModel`, and
-`LEAN_TOOLS`. For a reproducible smoke test, prefer the pytest command above.
+## Not committed
 
-## Test Without Spending Tokens
-
-Blank the API key environment variables to force model-backed tests to skip:
-
-```sh
-NEBIUS_API_KEY= TOKEN_FACTORY_API_KEY= OPENAI_API_KEY= uv run pytest -q
-```
-
-This checks the deterministic unit tests and Lean tool plumbing without calling
-the model API.
-
-## Files That Should Not Be Committed
-
-These are intentionally ignored:
-
-- `.env`
-- `.venv/`
-- `logs/`
-- `lean_project/.lake/`
-- `lean_project/AgentOutput.lean`
+`.env`, `logs/`, `results/`, the sibling benchmark checkouts (`PutnamBench/`,
+`miniF2F-lean4/`), and the `.lake/` build dirs are gitignored.
