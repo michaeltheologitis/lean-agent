@@ -1,16 +1,16 @@
 """Run logging — what the model saw and did.
 
-smolagents already records each step structurally — the code the agent ran
-(`step.code_action`), the tool output (`step.observations`), the per-step token usage — so
-we just read those fields; no parsing. Each run writes two files:
+smolagents records each step structurally, so we read its fields directly (no parsing). Each
+run writes two files into `logs/<timestamp>-<run_id>/`:
 
-    run.json  — the full structured record (manifest + every step + total usage), straight
-                from smolagents' own `agent.memory.get_full_steps()`.
-    run.md    — a readable per-step view (the thought, the code it ran, the Lean output,
-                token usage). The file you read after a run.
+    run.json        the full structured record (manifest + every step + usage), straight from
+                    `agent.memory.get_full_steps()` — for programmatic analysis.
+    transcript.yaml the top-down conversation lineage as a list of turns
+                    (system / user / assistant / tool-call / tool-response) — the file you read
+                    to trace what happened, in order.
 
-The manifest carries the run's identity (model / benchmark / problem); the log-folder name
-stays opaque (`<timestamp>-<run_id>`). Runs accumulate, never overwrite.
+The manifest carries the run's identity (model / benchmark / problem); the folder name stays
+opaque (`<timestamp>-<run_id>`). Runs accumulate, never overwrite.
 """
 
 from __future__ import annotations
@@ -19,6 +19,8 @@ import json
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
+
+import yaml
 
 from .settings import get_settings
 
@@ -34,8 +36,18 @@ def _text(value) -> str:
     return "" if value is None else str(value)
 
 
+def _messages(agent) -> list[dict[str, str]]:
+    """The run as a flat, ordered list of turns, from smolagents' own `to_messages()`.
+    Roles are the raw `MessageRole` values: system / user / assistant / tool-call /
+    tool-response."""
+    raw = list(agent.memory.system_prompt.to_messages())
+    for step in agent.memory.steps:
+        raw.extend(step.to_messages())
+    return [{"role": m.role.value, "content": _text(m.content)} for m in raw]
+
+
 def save_run(agent, answer, *, run_id: str | None = None, manifest: dict | None = None) -> Path:
-    """Persist a finished agent run (run.json + run.md) and return the run directory."""
+    """Persist a finished agent run (run.json + transcript.yaml) and return the run directory."""
     settings = get_settings()
     run_id = run_id or secrets.token_hex(3)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -58,39 +70,7 @@ def save_run(agent, answer, *, run_id: str | None = None, manifest: dict | None 
         ),
         encoding="utf-8",
     )
-    (run_dir / "run.md").write_text(_markdown(agent, answer, meta, usage), encoding="utf-8")
+    transcript = {**meta, "answer": str(answer), "usage": usage, "messages": _messages(agent)}
+    with (run_dir / "transcript.yaml").open("w", encoding="utf-8") as f:
+        yaml.safe_dump(transcript, f, sort_keys=False, allow_unicode=True, width=100)
     return run_dir
-
-
-def _markdown(agent, answer, meta, usage) -> str:
-    head = " · ".join(f"{k}: {v}" for k, v in meta.items() if k != "timestamp")
-    lines = [f"# {meta['run_id']}", "", head, ""]
-    for step in agent.memory.steps:
-        task = getattr(step, "task", None)
-        if task:  # the initial TaskStep
-            lines += ["## Task", "", _text(task), ""]
-            continue
-        output = _text(getattr(step, "model_output", "") or "")
-        code = getattr(step, "code_action", None)
-        tool_calls = getattr(step, "tool_calls", None)
-        observations = getattr(step, "observations", None)
-        tu = getattr(step, "token_usage", None)
-        lines += [f"## Step {getattr(step, 'step_number', '?')}", ""]
-        if output:
-            lines += ["**Model output**", "", output, ""]
-        if code:
-            lines += ["**Code run**", "", "```python", str(code).strip(), "```", ""]
-        elif tool_calls:
-            rendered = "\n".join(
-                f"{getattr(tc, 'name', '?')}({getattr(tc, 'arguments', '')})" for tc in tool_calls
-            )
-            lines += ["**Tool call**", "", "```", rendered.strip(), "```", ""]
-        if observations:
-            lines += ["**Lean output**", "", "```", _text(observations).strip(), "```", ""]
-        if tu:
-            lines += [f"_tokens — in: {tu.input_tokens}, out: {tu.output_tokens}_", ""]
-    lines += [
-        "## Final answer", "", str(answer), "",
-        f"_total tokens — in: {usage['input_tokens']}, out: {usage['output_tokens']}_", "",
-    ]
-    return "\n".join(lines)

@@ -1,11 +1,12 @@
-"""Tests for problem loading + the preamble/statement split."""
+"""Tests for the benchmarks harness: the preamble/statement split + loaders + prompt."""
 
 from __future__ import annotations
 
 import pytest
 
-from lean_agent import benchmarks
-from lean_agent.benchmarks import _split, load, load_experiment
+from benchmarks import _split, load, load_experiment
+from lean_agent import Problem
+from lean_agent.agent import _prompt, _system_prompt
 
 
 def test_split_single_theorem():
@@ -29,10 +30,10 @@ def test_split_target_is_last_theorem():
     assert name == "target"
 
 
-def test_split_strips_doc_comment_from_preamble():
-    text = "import Mathlib\n\n/-- some informal text -/\ntheorem foo : True := sorry\n"
+def test_split_strips_comments_from_preamble():
+    text = "import Mathlib\n\n/-- doc -/\n-- a line comment\ntheorem foo : True := sorry\n"
     preamble, statement, _ = _split(text)
-    assert "informal text" not in preamble
+    assert preamble == "import Mathlib"
     assert statement == "theorem foo : True"
 
 
@@ -41,8 +42,7 @@ def test_load_minif2f():
     assert len(probs) >= 10
     p = next(x for x in probs if x.name == "mathd_algebra_116")
     assert "import Mathlib" in p.preamble
-    assert p.statement.startswith("theorem mathd_algebra_116")
-    assert "sorry" not in p.statement
+    assert p.statement.startswith("theorem mathd_algebra_116") and "sorry" not in p.statement
 
 
 def test_load_smoke_has_empty_preamble():
@@ -66,7 +66,18 @@ def test_load_experiment_conditions():
     assert raw.preamble == "" and raw.statement.startswith("theorem target")
 
 
+# --- prompt building (core; uses a loaded Problem) ----------------------------
+
+
 def test_prompt_mentions_tool_and_goal():
     (p,) = load_experiment("even_self", names=["raw"])
-    prompt = p.prompt()
+    prompt = _prompt(p)
     assert "lean_check" in prompt and "∃ k, n + n = 2 * k" in prompt
+
+
+def test_system_prompt_includes_preamble_definitions():
+    notated = Problem(name="t", benchmark="experiment",
+                      preamble="def IsEven (n : Nat) : Prop := ∃ k, n = 2 * k", statement="theorem t : True")
+    raw = Problem(name="t", benchmark="experiment", preamble="", statement="theorem t : True")
+    assert "def IsEven" in _system_prompt(notated)
+    assert "Already loaded" not in _system_prompt(raw)  # no preamble → no extra block

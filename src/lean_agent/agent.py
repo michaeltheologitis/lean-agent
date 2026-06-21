@@ -2,17 +2,17 @@
 
 `solve(problem, lean)` pre-warms BOTH the Lean environment (run the problem's preamble to get a
 base env with its definitions) AND the system prompt (append the same preamble), then runs a
-smolagents `CodeAgent` whose one tool, `lean_check`, compiles code against that env. The run is
-graded by whether any submission was a complete valid proof of the target, then logged.
+smolagents `ToolCallingAgent` whose one tool, `lean_check`, compiles code against that env. The
+run is graded by whether any submission was a complete valid proof of the target, then logged.
 """
 
 from __future__ import annotations
 
 from smolagents import OpenAIServerModel, ToolCallingAgent
 
-from .benchmarks import Problem
 from .lean import Lean, make_lean_check
 from .logs import save_run
+from .problem import Problem
 from .settings import get_settings
 
 # A ToolCallingAgent (not CodeAgent): the model's job is to call `lean_check` with a blob of
@@ -39,26 +39,41 @@ def build_model(**kwargs):
     return OpenAIServerModel(model_id=s.model_id, api_base=s.api_base, api_key=s.api_key, **kwargs)
 
 
+def _prompt(problem: Problem) -> str:
+    informal = f"Informal statement:\n{problem.informal}\n\n" if problem.informal else ""
+    first = problem.statement.splitlines()[0]
+    return (
+        "Prove this Lean 4 theorem. The imports and any given definitions are ALREADY loaded "
+        "in the environment — use them directly, do not repeat them.\n\n"
+        f"{informal}Goal:\n```lean\n{problem.statement} := sorry\n```\n\n"
+        f"Call `lean_check(code)` with the COMPLETE declaration and your proof "
+        f"(`{first} ... := <proof>`), read the feedback, and iterate. When it reports the "
+        "proof is valid and complete, call `final_answer(\"done\")`."
+    )
+
+
+def _system_prompt(problem: Problem) -> str:
+    if not problem.preamble.strip():
+        return INSTRUCTIONS
+    return INSTRUCTIONS + (
+        "\n\nAlready loaded in the Lean environment — use these directly (do NOT redeclare "
+        f"them):\n```lean\n{problem.preamble.strip()}\n```"
+    )
+
+
 def solve(problem: Problem, *, lean: Lean, model=None, max_steps: int = 6, save: bool = True) -> dict:
     """Run the agent on one problem against `lean` (a shared REPL session). Returns a result
     dict (passed / steps / usage / run_dir)."""
     base_env = lean.base_env(problem.preamble)
     record = {"passed": False}
     lean_check = make_lean_check(lean, base_env, problem.statement, record)
-
-    instructions = INSTRUCTIONS
-    if problem.preamble.strip():
-        instructions += (
-            "\n\nAlready loaded in the Lean environment — use these directly (do NOT redeclare "
-            f"them):\n```lean\n{problem.preamble.strip()}\n```"
-        )
     agent = ToolCallingAgent([lean_check], model=model or build_model(),
-                             max_steps=max_steps, instructions=instructions)
+                             max_steps=max_steps, instructions=_system_prompt(problem))
 
     error = None
     answer = ""
     try:
-        answer = agent.run(problem.prompt())
+        answer = agent.run(_prompt(problem))
     except Exception as exc:  # record API/agent failures, keep the batch going
         error = f"{type(exc).__name__}: {exc}"
 

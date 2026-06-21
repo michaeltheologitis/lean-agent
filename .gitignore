@@ -28,14 +28,10 @@ logs/
 .vscode/
 
 # Benchmark grading projects: sibling source checkouts built locally with
-# `lake exe cache get`. The vendored statements live in data/; these are the
-# matching-Mathlib Lean projects the agent compiles against.
+# `lake exe cache get`. The vendored statements live in benchmarks/data/; these
+# are the matching-Mathlib Lean projects the agent compiles against.
 /PutnamBench/
 /miniF2F-lean4/
-
-# Experiment / benchmark run records (kept locally, not committed)
-results/
-*.results.jsonl
 
 # Local working docs (grounded-reasoning style; decoupled from the upstream repo,
 # intentionally NOT committed). Live working memory for whoever drives the repo.

@@ -20,25 +20,17 @@ from pathlib import Path
 from lean_interact import Command, LeanREPLConfig, LeanServer, LocalProject, TempRequireProject
 from smolagents import tool
 
-from .settings import PROJECT_ROOT, get_settings
-
-# Where each benchmark's matching built Lean project lives (gitignored sibling checkouts).
-_BENCH_PROJECTS = {
-    "minif2f": PROJECT_ROOT / "miniF2F-lean4",
-    "putnam": PROJECT_ROOT / "PutnamBench" / "lean4",
-}
+from .settings import get_settings
 
 
-def lean_config(benchmark: str, preamble: str) -> LeanREPLConfig:
-    """Pick the LeanInteract config for a run. Core Lean (no Mathlib) just needs a version;
-    a Mathlib task needs a built Mathlib project — the benchmark's sibling checkout, the
-    configured `LEAN_PROJECT`, or a temp Mathlib project built on demand."""
+def lean_config(preamble: str, project=None) -> LeanREPLConfig:
+    """Pick the LeanInteract config for a run. Core Lean (no Mathlib) just needs a version; a
+    Mathlib task needs a built Mathlib project — `project` (a path), else the configured
+    `LEAN_PROJECT`, else a temp Mathlib project built on demand."""
     s = get_settings()
     if "import Mathlib" not in preamble:
         return LeanREPLConfig(lean_version=s.lean_version)
-    project = _BENCH_PROJECTS.get(benchmark)
-    if project is None and s.lean_project:
-        project = Path(s.lean_project)
+    project = project or s.lean_project
     if project is not None:
         return LeanREPLConfig(project=LocalProject(directory=str(project)))
     return LeanREPLConfig(project=TempRequireProject(lean_version=s.lean_version, require="mathlib"))
