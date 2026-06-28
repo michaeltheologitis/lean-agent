@@ -82,3 +82,28 @@ def test_lean_check_no_pass_if_not_ok():
     tool = make_lean_check(lean, None, "theorem target : True", record)
     tool.forward(code="theorem target : True := by sorry")
     assert record["passed"] is False
+
+
+def test_lean_check_captures_winning_proof():
+    lean = _FakeLean(LeanResult(ok=True, complete=True, feedback="✓ valid"))
+    record = {"passed": False}
+    tool = make_lean_check(lean, None, "theorem target : True", record)
+    tool.forward(code="theorem target : True := trivial")
+    assert record["proof"] == "theorem target : True := trivial"
+
+
+def test_lean_check_no_proof_when_not_passed():
+    lean = _FakeLean(LeanResult(ok=False, complete=False, feedback="△ incomplete"))
+    record = {"passed": False}
+    tool = make_lean_check(lean, None, "theorem target : True", record)
+    tool.forward(code="theorem target : True := by sorry")
+    assert "proof" not in record
+
+
+def test_lean_check_keeps_first_winning_proof():
+    lean = _FakeLean(LeanResult(ok=True, complete=True, feedback="✓ valid"))
+    record = {"passed": False}
+    tool = make_lean_check(lean, None, "theorem target : True", record)
+    tool.forward(code="theorem target : True := trivial")
+    tool.forward(code="theorem target : True := by trivial")
+    assert record["proof"] == "theorem target : True := trivial"

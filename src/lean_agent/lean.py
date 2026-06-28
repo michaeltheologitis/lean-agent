@@ -86,7 +86,8 @@ def make_lean_check(lean: Lean, env, statement: str, record: dict):
     """Build the agent's `lean_check` tool, bound to one problem's base env + target statement.
 
     Sets `record["passed"] = True` the first time a submission is a complete valid proof that
-    still contains the target statement (so the agent can't 'win' by changing the goal)."""
+    still contains the target statement (so the agent can't 'win' by changing the goal), and
+    keeps that first winning submission verbatim in `record["proof"]`."""
     target = " ".join(statement.split())
 
     @tool
@@ -100,6 +101,7 @@ def make_lean_check(lean: Lean, env, statement: str, record: dict):
         result = lean.check(code, env)
         if result.ok and target in " ".join(code.split()):
             record["passed"] = True
+            record.setdefault("proof", code)  # keep the first winning proof
         return result.feedback
 
     return lean_check

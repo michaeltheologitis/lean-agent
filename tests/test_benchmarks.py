@@ -81,3 +81,14 @@ def test_system_prompt_includes_preamble_definitions():
     raw = Problem(name="t", benchmark="experiment", preamble="", statement="theorem t : True")
     assert "def IsEven" in _system_prompt(notated)
     assert "Already loaded" not in _system_prompt(raw)  # no preamble → no extra block
+
+
+def test_system_prompt_appends_extra_instructions():
+    p = Problem(name="t", benchmark="experiment", preamble="", statement="theorem t : True")
+    out = _system_prompt(p, extra_instructions="You do NOT have Mathlib available.")
+    assert "You do NOT have Mathlib available." in out
+
+
+def test_system_prompt_no_extra_block_by_default():
+    p = Problem(name="t", benchmark="experiment", preamble="", statement="theorem t : True")
+    assert _system_prompt(p) == _system_prompt(p, "")

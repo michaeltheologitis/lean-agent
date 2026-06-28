@@ -17,7 +17,10 @@ A problem is a `.lean` file split at its last `theorem`: everything above is the
 REPL *and* into the model's system prompt; a `ToolCallingAgent` then iterates with one tool,
 `lean_check(code)`, which compiles candidates and returns structured errors / remaining goals.
 Each run is graded (a real, complete proof of the goal) and logged to
-`logs/<run>/{run.json, transcript.yaml}`.
+`logs/<run>/{run.json, transcript.yaml}` — plus a self-contained, re-compilable `proof.lean`
+(preamble + the winning proof) when it succeeds. `solve(...)` also returns that proof in its
+result dict. Pass `--extra-instruct "…"` (or `solve(..., extra_instructions=…)`) to append your
+own guidance to the agent's system prompt (e.g. *"No Mathlib available"*).
 
 ## Setup
 

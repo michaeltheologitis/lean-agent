@@ -52,23 +52,29 @@ def _prompt(problem: Problem) -> str:
     )
 
 
-def _system_prompt(problem: Problem) -> str:
-    if not problem.preamble.strip():
-        return INSTRUCTIONS
-    return INSTRUCTIONS + (
-        "\n\nAlready loaded in the Lean environment — use these directly (do NOT redeclare "
-        f"them):\n```lean\n{problem.preamble.strip()}\n```"
-    )
+def _system_prompt(problem: Problem, extra_instructions: str = "") -> str:
+    prompt = INSTRUCTIONS
+    if problem.preamble.strip():
+        prompt += (
+            "\n\nAlready loaded in the Lean environment — use these directly (do NOT redeclare "
+            f"them):\n```lean\n{problem.preamble.strip()}\n```"
+        )
+    if extra_instructions.strip():
+        prompt += f"\n\n{extra_instructions.strip()}"
+    return prompt
 
 
-def solve(problem: Problem, *, lean: Lean, model=None, max_steps: int = 6, save: bool = True) -> dict:
+def solve(problem: Problem, *, lean: Lean, model=None, max_steps: int = 6, save: bool = True,
+          extra_instructions: str = "") -> dict:
     """Run the agent on one problem against `lean` (a shared REPL session). Returns a result
-    dict (passed / steps / usage / run_dir)."""
+    dict (passed / proof / steps / usage / run_dir). `extra_instructions`, if given, is appended
+    to the system prompt (e.g. "You do NOT have Mathlib — only core Lean is available")."""
     base_env = lean.base_env(problem.preamble)
     record = {"passed": False}
     lean_check = make_lean_check(lean, base_env, problem.statement, record)
     agent = ToolCallingAgent([lean_check], model=model or build_model(),
-                             max_steps=max_steps, instructions=_system_prompt(problem),
+                             max_steps=max_steps,
+                             instructions=_system_prompt(problem, extra_instructions),
                              verbosity_level=0)  # quiet — the runner/caller prints its own summary
 
     error = None
@@ -83,6 +89,7 @@ def solve(problem: Problem, *, lean: Lean, model=None, max_steps: int = 6, save:
         "problem": problem.name,
         "benchmark": problem.benchmark,
         "passed": record["passed"],
+        "proof": record.get("proof"),
         "steps": len(agent.memory.steps),
         "input_tokens": usage.input_tokens,
         "output_tokens": usage.output_tokens,
@@ -90,8 +97,14 @@ def solve(problem: Problem, *, lean: Lean, model=None, max_steps: int = 6, save:
     }
     if save:
         try:
-            rd = save_run(agent, answer, run_id=f"{problem.benchmark}-{problem.name}".replace("/", "-"),
-                          manifest={k: result[k] for k in ("benchmark", "problem", "passed")})
+            manifest = {k: result[k] for k in ("benchmark", "problem", "passed")}
+            if extra_instructions.strip():
+                manifest["extra_instructions"] = extra_instructions.strip()
+            proof = record.get("proof")  # the winning declaration; prepend the preamble so it stands alone
+            if proof and problem.preamble.strip():
+                proof = f"{problem.preamble.strip()}\n\n{proof}"
+            rd = save_run(agent, answer, manifest=manifest, proof=proof,
+                          run_id=f"{problem.benchmark}-{problem.name}".replace("/", "-"))
             result["run_dir"] = str(rd)
         except Exception as exc:
             result["error"] = (error + " | " if error else "") + f"save_run failed: {exc}"

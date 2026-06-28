@@ -71,8 +71,12 @@ def _messages(agent) -> list[dict[str, str]]:
     return out
 
 
-def save_run(agent, answer, *, run_id: str | None = None, manifest: dict | None = None) -> Path:
-    """Persist a finished agent run (run.json + transcript.yaml) and return the run directory."""
+def save_run(agent, answer, *, run_id: str | None = None, manifest: dict | None = None,
+             proof: str | None = None) -> Path:
+    """Persist a finished agent run (run.json + transcript.yaml) and return the run directory.
+
+    If `proof` is given (the winning proof, preamble included), also write a self-contained,
+    re-compilable `proof.lean`."""
     settings = get_settings()
     run_id = run_id or secrets.token_hex(3)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -99,4 +103,8 @@ def save_run(agent, answer, *, run_id: str | None = None, manifest: dict | None 
     with (run_dir / "transcript.yaml").open("w", encoding="utf-8") as f:
         yaml.dump(transcript, f, Dumper=_ReadableDumper, sort_keys=False,
                   allow_unicode=True, default_flow_style=False, width=10 ** 9)
+    if proof:
+        (run_dir / "proof.lean").write_text(
+            proof if proof.endswith("\n") else proof + "\n", encoding="utf-8"
+        )
     return run_dir

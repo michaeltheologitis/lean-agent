@@ -132,3 +132,19 @@ def test_transcript_is_ordered_lineage(monkeypatch, tmp_path):
     assert "\\n" not in raw
     sys_content = next(m["content"] for m in t["messages"] if m["role"] == "system")
     assert sys_content == "you are a prover\nwith a multi-line\nsystem prompt"
+
+
+def test_save_run_writes_proof_lean(monkeypatch, tmp_path):
+    _stub(monkeypatch, tmp_path)
+    run_dir = logs_module.save_run(FakeAgent(), "done", run_id="t-log",
+                                   manifest={"benchmark": "smoke"},
+                                   proof="theorem smoke_true : True := trivial")
+    assert (run_dir / "proof.lean").read_text().strip() == "theorem smoke_true : True := trivial"
+    assert {p.name for p in run_dir.iterdir()} == {"run.json", "transcript.yaml", "proof.lean"}
+
+
+def test_save_run_no_proof_file_when_absent(monkeypatch, tmp_path):
+    _stub(monkeypatch, tmp_path)
+    run_dir = logs_module.save_run(FakeAgent(), "done", run_id="t-log")
+    assert not (run_dir / "proof.lean").exists()
+    assert {p.name for p in run_dir.iterdir()} == {"run.json", "transcript.yaml"}

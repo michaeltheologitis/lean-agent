@@ -39,6 +39,8 @@ def main(argv=None) -> int:
     p.add_argument("--n", type=int, default=None, help="run the first N problems")
     p.add_argument("--names", nargs="*", default=None, help="explicit problem/condition names")
     p.add_argument("--max-steps", type=int, default=6)
+    p.add_argument("--extra-instruct", default="",
+                   help="extra guidance appended to the agent's system prompt (e.g. 'No Mathlib available')")
     p.add_argument("--no-save", action="store_true", help="don't write per-run logs")
     args = p.parse_args(argv)
 
@@ -66,7 +68,8 @@ def main(argv=None) -> int:
     n_pass = 0
     with summary_path.open("w", encoding="utf-8") as log:
         for i, problem in enumerate(problems, 1):
-            r = solve(problem, lean=lean, model=model, max_steps=args.max_steps, save=not args.no_save)
+            r = solve(problem, lean=lean, model=model, max_steps=args.max_steps,
+                      save=not args.no_save, extra_instructions=args.extra_instruct)
             log.write(json.dumps(r, ensure_ascii=False) + "\n")
             log.flush()
             n_pass += int(r["passed"])
