@@ -33,6 +33,17 @@ elan default leanprover/lean4:v4.29.1
 Default model is OpenAI `gpt-5.4-mini` (override via env — see
 [settings.py](src/lean_agent/settings.py)). The first run builds the Lean REPL (one-time).
 
+**Other providers (OpenAI-compatible).** The agent talks to any OpenAI-compatible endpoint, so
+you can swap OpenAI for Token Factory / Nebius / a local vLLM by setting env vars. Resolution is
+OpenAI-first, so leave `OPENAI_API_KEY` unset for the dedicated slot to win. E.g. Token Factory
+running a DeepSeek model:
+
+```sh
+TOKEN_FACTORY_API_KEY=...                                   # your key
+TOKEN_FACTORY_MODEL=deepseek-ai/DeepSeek-V4-Pro             # any tool-calling model in the catalog
+TOKEN_FACTORY_BASE_URL=https://api.tokenfactory.nebius.com/v1/
+```
+
 ## Run it
 
 ```sh
