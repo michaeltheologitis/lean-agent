@@ -51,7 +51,6 @@ TOKEN_FACTORY_BASE_URL=https://api.tokenfactory.nebius.com/v1/
 
 ```sh
 uv run pytest -q                              # unit tests (no API, no Lean)
-uv run python run.py --experiment even_self   # the hypothesis demo (core Lean, no Mathlib)
 uv run python run.py --benchmark smoke        # core-Lean plumbing check
 ```
 
@@ -59,15 +58,17 @@ uv run python run.py --benchmark smoke        # core-Lean plumbing check
 `git clone https://github.com/yangky11/miniF2F-lean4 && cd miniF2F-lean4 && lake exe cache get`)
 or set `LEAN_PROJECT`, then `--benchmark minif2f`.
 
-**Adding a problem:** drop a `.lean` file in `benchmarks/data/experiments/<name>/` (one per
-condition), or build a `Problem(...)` in Python. The notebook shows both.
+**Benchmarks vs. experiments.** Benchmarks (`smoke` / `minif2f` / `putnam`) are vendored `.lean`
+files loaded by `load(...)`. For your own problems or a notation experiment, build a `Problem(...)`
+in Python — the `preamble` holds any definitions/lemmas, the `statement` is the goal — and pass it
+to `solve(...)`. The notebook (section 5) does exactly that. There's no file-based experiment loader.
 
 ## Layout
 
 ```
 src/lean_agent/   # core library: settings, problem, lean (LeanInteract), agent, logs
-benchmarks/       # eval harness (out of the core): load / load_experiment + data/
-run.py            # CLI (--benchmark / --experiment)
+benchmarks/       # eval harness (out of the core): load() + data/
+run.py            # CLI (--benchmark)
 notebooks/        # showcase.ipynb
 ```
 

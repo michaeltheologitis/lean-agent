@@ -1,16 +1,16 @@
-"""Run the agent over a benchmark, or an experiment's conditions, logging every run.
+"""Run the agent over a benchmark, logging every run.
 
-    # benchmarks (smoke needs only a Lean toolchain; minif2f/putnam need a built Mathlib project)
+    # smoke needs only a Lean toolchain; minif2f/putnam need a built Mathlib project
     uv run python run.py --benchmark smoke
     uv run python run.py --benchmark minif2f --n 5
 
-    # the hypothesis experiment: run every condition in benchmarks/data/experiments/<name>/
-    uv run python run.py --experiment even_self
-
 Each problem is proved against a pre-warmed Lean REPL environment (its preamble = imports +
 definitions, loaded into both Lean and the system prompt). Everything goes under `logs/`: one
-folder per run (`run.json` + `transcript.yaml`) plus a `<timestamp>-<label>-summary.jsonl` for
-the batch.
+folder per run (`run.json` + `transcript.yaml`, plus `proof.lean` on success) and a
+`<timestamp>-<label>-summary.jsonl` for the batch.
+
+For a one-off experiment, build a `Problem(...)` and call `solve(...)` from Python (see the
+notebook) — there is no file-based experiment loader.
 
 The first run builds the Lean REPL (one-time; needs `elan default` set). Mathlib tasks need a
 built project — set `LEAN_PROJECT`, or let a temp Mathlib project build on demand (slow first).
@@ -27,17 +27,15 @@ from lean_agent import build_model, solve
 from lean_agent.lean import Lean, lean_config
 from lean_agent.settings import get_settings
 
-from benchmarks import PROJECTS, load, load_experiment
+from benchmarks import PROJECTS, load
 
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    group = p.add_mutually_exclusive_group()
-    group.add_argument("--benchmark", choices=["smoke", "minif2f", "putnam"])
-    group.add_argument("--experiment", help="name of an experiment under benchmarks/data/experiments/")
+    p.add_argument("--benchmark", choices=["smoke", "minif2f", "putnam"], default="smoke")
     p.add_argument("--n", type=int, default=None, help="run the first N problems")
-    p.add_argument("--names", nargs="*", default=None, help="explicit problem/condition names")
+    p.add_argument("--names", nargs="*", default=None, help="explicit problem names")
     p.add_argument("--max-steps", type=int, default=6)
     p.add_argument("--extra-instruct", default="",
                    help="extra guidance appended to the agent's system prompt (e.g. 'No Mathlib available')")
@@ -45,13 +43,8 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
 
     settings = get_settings()
-    if args.experiment:
-        problems = load_experiment(args.experiment, names=args.names)
-        label, project = f"experiment-{args.experiment}", settings.lean_project
-    else:
-        benchmark = args.benchmark or "smoke"
-        problems = load(benchmark, names=args.names)
-        label, project = benchmark, PROJECTS.get(benchmark)
+    problems = load(args.benchmark, names=args.names)
+    label, project = args.benchmark, PROJECTS.get(args.benchmark)
     if args.n is not None and not args.names:
         problems = problems[: args.n]
     if not problems:

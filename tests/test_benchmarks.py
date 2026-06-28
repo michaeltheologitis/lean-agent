@@ -1,10 +1,10 @@
-"""Tests for the benchmarks harness: the preamble/statement split + loaders + prompt."""
+"""Tests for the benchmarks harness: the preamble/statement split + loader + prompt."""
 
 from __future__ import annotations
 
 import pytest
 
-from benchmarks import _split, load, load_experiment
+from benchmarks import _split, load
 from lean_agent import Problem
 from lean_agent.agent import _prompt, _system_prompt
 
@@ -18,7 +18,8 @@ def test_split_single_theorem():
 
 
 def test_split_target_is_last_theorem():
-    """Helper lemmas above the goal belong to the preamble; the goal is the last theorem."""
+    """A benchmark file with helpers above the goal: the goal is the last theorem, the rest
+    becomes the preamble. (Experiments build a Problem directly instead of relying on this.)"""
     text = (
         "def IsEven (n : Nat) : Prop := ∃ k, n = 2 * k\n\n"
         "theorem helper (n : Nat) : IsEven (n + n) := ⟨n, by omega⟩\n\n"
@@ -56,21 +57,12 @@ def test_load_unknown_raises():
         load("nope")
 
 
-def test_load_experiment_conditions():
-    probs = load_experiment("even_self")
-    names = {p.name for p in probs}
-    assert names == {"even_self/notated", "even_self/raw"}
-    notated = next(p for p in probs if p.name == "even_self/notated")
-    assert "def IsEven" in notated.preamble and "isEven_add_self" in notated.preamble
-    raw = next(p for p in probs if p.name == "even_self/raw")
-    assert raw.preamble == "" and raw.statement.startswith("theorem target")
-
-
-# --- prompt building (core; uses a loaded Problem) ----------------------------
+# --- prompt building (core; uses a Problem you build directly) -----------------
 
 
 def test_prompt_mentions_tool_and_goal():
-    (p,) = load_experiment("even_self", names=["raw"])
+    p = Problem(name="raw", benchmark="experiment", preamble="",
+                statement="theorem target (n : Nat) : ∃ k, n + n = 2 * k")
     prompt = _prompt(p)
     assert "lean_check" in prompt and "∃ k, n + n = 2 * k" in prompt
 

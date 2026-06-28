@@ -1,20 +1,18 @@
-"""Benchmarks + experiments — the evaluation harness (kept out of the core `lean_agent`).
+"""Benchmarks — the evaluation harness (kept out of the core `lean_agent`).
 
-A problem is a `.lean` file split into two parts:
+A benchmark problem is a `.lean` file split into two parts:
 
   * **preamble** — everything before the target theorem: imports, `open`s, definitions, helper
     lemmas. Pre-loaded into the Lean environment AND the system prompt.
   * **statement** — the target `theorem <name> ... :=` (the goal; the agent supplies the proof).
 
-The target is the **last** `theorem` in the file, so an experiment file can list helper
-definitions/lemmas above the goal. Plain benchmark files have just one theorem.
+The target is the **last** `theorem` in the file. `load(benchmark)` reads `smoke` / `minif2f` /
+`putnam` from `benchmarks/data/<benchmark>/`.
 
-  load(benchmark)        — `smoke` / `minif2f` / `putnam` from `benchmarks/data/<benchmark>/`.
-  load_experiment(name)  — `benchmarks/data/experiments/<name>/*.lean`; one file per *condition*
-                           (e.g. `notated.lean` vs `raw.lean`) of the same proposition.
-
-`PROJECTS` maps the Mathlib benchmarks to their matching built Lean project (a gitignored
-sibling checkout); the runner passes it to `lean_config`.
+For a one-off / hypothesis experiment, don't add a file — build a `Problem(...)` directly in
+Python (preamble = your definitions, statement = the goal) and pass it to `solve`; the notebook
+shows this. `PROJECTS` maps the Mathlib benchmarks to their matching built Lean project (a
+gitignored sibling checkout); the runner passes it to `lean_config`.
 """
 
 from __future__ import annotations
@@ -61,36 +59,18 @@ def _split(text: str) -> tuple[str, str, str]:
     return preamble, block, name
 
 
-def _load_dir(directory: Path, benchmark: str, *, names=None, name_prefix="") -> list[Problem]:
+def load(benchmark: str, *, names: list[str] | None = None) -> list[Problem]:
+    """Load `smoke` / `minif2f` / `putnam` problems from `benchmarks/data/<benchmark>/`."""
+    if benchmark not in ("smoke", "minif2f", "putnam"):
+        raise ValueError(f"unknown benchmark {benchmark!r}")
     out: list[Problem] = []
-    for f in sorted(directory.glob("*.lean")):
+    for f in sorted((DATA / benchmark).glob("*.lean")):
         if names and f.stem not in names:
             continue
         text = f.read_text(encoding="utf-8")
         preamble, statement, thm = _split(text)
         if not statement:
             continue
-        out.append(Problem(
-            name=f"{name_prefix}{f.stem}",
-            benchmark=benchmark,
-            preamble=preamble,
-            statement=statement,
-            informal=_informal(text, thm),
-        ))
+        out.append(Problem(name=f.stem, benchmark=benchmark, preamble=preamble,
+                           statement=statement, informal=_informal(text, thm)))
     return out
-
-
-def load(benchmark: str, *, names: list[str] | None = None) -> list[Problem]:
-    """Load `smoke` / `minif2f` / `putnam` problems."""
-    if benchmark not in ("smoke", "minif2f", "putnam"):
-        raise ValueError(f"unknown benchmark {benchmark!r}")
-    return _load_dir(DATA / benchmark, benchmark, names=names)
-
-
-def load_experiment(name: str, *, names: list[str] | None = None) -> list[Problem]:
-    """Load the conditions of an experiment from `benchmarks/data/experiments/<name>/`
-    (one `.lean` file per condition, e.g. `notated.lean` and `raw.lean`)."""
-    directory = DATA / "experiments" / name
-    if not directory.is_dir():
-        raise ValueError(f"no experiment at {directory}")
-    return _load_dir(directory, "experiment", names=names, name_prefix=f"{name}/")
