@@ -16,11 +16,11 @@ A problem is a `.lean` file split at its last `theorem`: everything above is the
 (imports + definitions), the theorem is the **goal**. The preamble is loaded once into a Lean
 REPL *and* into the model's system prompt; a `ToolCallingAgent` then iterates with one tool,
 `lean_check(code)`, which compiles candidates and returns structured errors / remaining goals.
-Each run is graded (a real, complete proof of the goal) and logged to
-`logs/<run>/{run.json, transcript.yaml}` — plus a self-contained, re-compilable `proof.lean`
-(preamble + the winning proof) when it succeeds. `solve(...)` also returns that proof in its
-result dict. Pass `--extra-instruct "…"` (or `solve(..., extra_instructions=…)`) to append your
-own guidance to the agent's system prompt (e.g. *"No Mathlib available"*).
+Each run is graded (a real, complete proof of the goal) and logged to `logs/<run>/` —
+`run.json`, `transcript.yaml`, and on success a self-contained, re-compilable `proof.lean`
+(preamble + the winning proof). Two handles on the run: `solve(...)` returns the proof in
+`result["proof"]`, and `extra_instructions="…"` (CLI: `--extra-instruct "…"`) appends your own
+guidance to the agent's system prompt — empty by default. The notebook's section 6 shows both.
 
 ## Setup
 
