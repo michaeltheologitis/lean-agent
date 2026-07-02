@@ -69,3 +69,10 @@ logs/<UTC-timestamp>-<run_id>/
     run.json         # {manifest, answer, logs: {total_usage, steps: [{usage, messages}, ...]}}
     transcript.yaml  # sanitized linear system / user / assistant / tool-* chat view
 ```
+
+## PutnamBench test stuff
+
+you can for now get problems, get problem statement, and verify proof.
+
+any generated lean code should be as a string, so it's easier for the code to parse.
+
